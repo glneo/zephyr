@@ -1,0 +1,8 @@
+# Copyright 2022 NXP
+# SPDX-License-Identifier: Apache-2.0
+
+config MBOX_TI_OMAP_MAILBOX
+	bool "TI OMAP Mailbox driver"
+	default y
+	help
+	  Driver for TI OMAP Mailbox.
