@@ -15,3 +15,4 @@ zephyr_library_sources_ifdef(CONFIG_MBOX_NRF_VEVIF_REMOTE mbox_nrf_vevif_remote.
 zephyr_library_sources_ifdef(CONFIG_MBOX_NRF_BELLBOARD_LOCAL mbox_nrf_bellboard_local.c)
 zephyr_library_sources_ifdef(CONFIG_MBOX_NRF_BELLBOARD_REMOTE mbox_nrf_bellboard_remote.c)
 zephyr_library_sources_ifdef(CONFIG_MBOX_STM32_HSEM   mbox_stm32_hsem.c)
+zephyr_library_sources_ifdef(CONFIG_MBOX_TI_OMAP_MAILBOX   mbox_ti_omap.c)
