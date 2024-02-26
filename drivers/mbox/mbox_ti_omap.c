@@ -8,9 +8,9 @@
 #include <zephyr/drivers/mbox.h>
 #include <zephyr/irq.h>
 #include <zephyr/spinlock.h>
-#define LOG_LEVEL CONFIG_MBOX_LOG_LEVEL
+
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(ti_omap_mailbox);
+LOG_MODULE_REGISTER(ti_omap_mailbox, CONFIG_MBOX_LOG_LEVEL);
 
 #define DT_DRV_COMPAT ti_omap_mailbox
 
@@ -104,24 +104,27 @@ static int omap_mailbox_send(const struct device *dev, uint32_t channel, const s
 		return -EINVAL;
 	}
 
-	if (regs->fifo_status[channel]) {
-		return -EBUSY;
-	}
-
 	key = k_spin_lock(&data->lock);
+
 	if (!msg) {
-		regs->message[channel] = 0;
+		if (!regs->fifo_status[channel]) {
+			regs->message[channel] = 0;
+		}
 		k_spin_unlock(&data->lock, key);
 		return 0;
 	}
 
-	if (msg->size > MAILBOX_MBOX_SIZE) {
+	if (msg->size != MAILBOX_MBOX_SIZE) {
 		k_spin_unlock(&data->lock, key);
 		return -EMSGSIZE;
 	}
 
 	memcpy(&data32, msg->data, msg->size);
-	regs->message[channel] = data32;
+
+	if (!regs->fifo_status[channel]) {
+		regs->message[channel] = data32;
+	}
+
 	k_spin_unlock(&data->lock, key);
 
 	return 0;
@@ -175,6 +178,8 @@ static int omap_mailbox_set_enabled(const struct device *dev, uint32_t channel, 
 		return -EALREADY;
 	}
 
+	LOG_DBG("Setting mailbox %s channel: %d", enable ? "enable" : "disable", channel);
+
 	key = k_spin_lock(&data->lock);
 	regs = DEV_REG_BASE(dev);
 	irqstatus = regs->irq_regs[cfg->usr_id].enable_set;
@@ -224,7 +229,7 @@ static DEVICE_API(mbox, omap_mailbox_driver_api) = {
 		return 0;									\
 	}											\
 	DEVICE_DT_INST_DEFINE(idx, omap_mailbox_##idx##_init, NULL, &omap_mailbox_##idx##_data,	\
-			      &omap_mailbox_##idx##_config, POST_KERNEL,	\
+			      &omap_mailbox_##idx##_config, PRE_KERNEL_2,	\
 			      CONFIG_MBOX_INIT_PRIORITY, &omap_mailbox_driver_api)
 
 DT_INST_FOREACH_STATUS_OKAY(MAILBOX_INSTANCE_DEFINE)
