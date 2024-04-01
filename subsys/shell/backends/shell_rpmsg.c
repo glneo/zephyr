@@ -120,6 +120,8 @@ static int write(const struct shell_transport *transport,
 	sh_rpmsg->shell_handler(SHELL_TRANSPORT_EVT_TX_RDY, sh_rpmsg->shell_context);
 
 	if (ret < 0) {
+		/* Consume buffer to prevent locking shell */
+		*cnt = length;
 		return ret;
 	}
 
