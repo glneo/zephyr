@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <zephyr/drivers/ipm.h>
+#include <zephyr/drivers/mbox.h>
 
 #include <openamp/open_amp.h>
 #include <metal/sys.h>
@@ -49,8 +49,8 @@ static struct k_thread thread_mng_data;
 static struct k_thread thread_rp__client_data;
 static struct k_thread thread_tty_data;
 
-static const struct device *const ipm_handle =
-	DEVICE_DT_GET(DT_CHOSEN(zephyr_ipc));
+const struct mbox_dt_spec mbox_channel_tx = MBOX_DT_SPEC_GET(DT_NODELABEL(ipc0), tx);
+const struct mbox_dt_spec mbox_channel_rx = MBOX_DT_SPEC_GET(DT_NODELABEL(ipc0), rx);
 
 static metal_phys_addr_t shm_physmap = SHM_START_ADDR;
 static metal_phys_addr_t rsc_tab_physmap;
@@ -82,10 +82,11 @@ static K_SEM_DEFINE(data_sem, 0, 1);
 static K_SEM_DEFINE(data_sc_sem, 0, 1);
 static K_SEM_DEFINE(data_tty_sem, 0, 1);
 
-static void platform_ipm_callback(const struct device *dev, void *context,
-				  uint32_t id, volatile void *data)
+static void platform_mbox_callback(const struct device *dev, uint32_t channel,
+				   void *user_data, struct mbox_msg *data)
 {
-	LOG_DBG("%s: msg received from mb %d", __func__, id);
+//	LOG_DBG("msg received from mb %d: data: 0x%08x, size: %d", channel, *((uint32_t *)data->data), data->size);
+
 	k_sem_give(&data_sem);
 }
 
@@ -133,7 +134,12 @@ int mailbox_notify(struct remoteproc *rproc, uint32_t id)
 	ARG_UNUSED(rproc);
 
 	LOG_DBG("%s: msg received", __func__);
-	ipm_send(ipm_handle, 0, id, NULL, 0);
+
+	struct mbox_msg msg = {
+		.data = &id,
+		.size = 4,
+	};
+	mbox_send_dt(&mbox_channel_tx, &msg);
 
 	return 0;
 }
@@ -161,19 +167,8 @@ int platform_init(void)
 	metal_io_init(rsc_io, rsc_table,
 		      &rsc_tab_physmap, rsc_size, -1, 0, NULL);
 
-	/* setup IPM */
-	if (!device_is_ready(ipm_handle)) {
-		LOG_ERR("IPM device is not ready");
-		return -1;
-	}
-
-	ipm_register_callback(ipm_handle, platform_ipm_callback, NULL);
-
-	status = ipm_set_enabled(ipm_handle, 1);
-	if (status) {
-		LOG_ERR("ipm_set_enabled failed");
-		return -1;
-	}
+	/* setup Mailbox */
+	mbox_register_callback_dt(&mbox_channel_rx, platform_mbox_callback, NULL);
 
 	return 0;
 }
@@ -198,7 +193,7 @@ static struct remoteproc rproc_inst;
 
 static void cleanup_system(void)
 {
-	ipm_set_enabled(ipm_handle, 0);
+	mbox_set_enabled_dt(&mbox_channel_rx, false);
 	rpmsg_deinit_vdev(&rvdev);
 	metal_finish();
 }
@@ -253,6 +248,12 @@ platform_create_rpmsg_vdev(unsigned int vdev_index,
 	ret = rpmsg_init_vdev(&rvdev, vdev, ns_cb, shm_io, NULL);
 	if (ret) {
 		LOG_ERR("failed rpmsg_init_vdev");
+		goto failed;
+	}
+
+	ret = mbox_set_enabled_dt(&mbox_channel_rx, true);
+	if (ret) {
+		LOG_DBG("mbox_set_enabled failed");
 		goto failed;
 	}
 
