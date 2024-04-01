@@ -1,0 +1,27 @@
+/*
+ * Copyright (c) 2023 Texas Instruments Incorporated
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	chosen {
+//		zephyr,ipc = &mbox;
+		zephyr,ipc_shm = &ddr0;
+	};
+
+	ipc0: ipc0 {
+		compatible = "zephyr,ipc-openamp-static-vrings";
+		memory-region = <&ddr0>;
+		mboxes = <&mbox 0>, <&mbox 1>;
+		mbox-names = "tx", "rx";
+		role = "remote";
+		status = "okay";
+	};
+
+//	ipc0: ipc {
+//		mboxes = <&mbox 0>, <&mbox 1>;
+//		mbox-names = "tx", "rx";
+//		status = "okay";
+//	};
+};
