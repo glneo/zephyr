@@ -133,7 +133,7 @@ int mailbox_notify(struct remoteproc *rproc, uint32_t id)
 {
 	ARG_UNUSED(rproc);
 
-	LOG_DBG("%s: msg received", __func__);
+//	LOG_DBG("%s: msg received", __func__);
 
 	struct mbox_msg msg = {
 		.data = &id,
@@ -163,6 +163,8 @@ int platform_init(void)
 	/* declare resource table region */
 	rsc_table_get(&rsc_table, &rsc_size);
 	rsc_tab_physmap = (uintptr_t)rsc_table;
+
+	printk(" *** Got rsc_table: %p\n", rsc_table);
 
 	metal_io_init(rsc_io, rsc_table,
 		      &rsc_tab_physmap, rsc_size, -1, 0, NULL);
@@ -230,6 +232,11 @@ platform_create_rpmsg_vdev(unsigned int vdev_index,
 	remoteproc_init_mem(mem, NULL, shm_physmap, shm_physmap, SHM_SIZE, shm_io);
 	remoteproc_add_mem(&rproc_inst, mem);
 
+//	printk("rsc_table->vdev->notifyid: %d\n", rsc_table->vdev->notifyid);
+//	printk("rsc_table->vdev->da: 0x%08x\n", rsc_table->vdev->da);
+//	printk("rsc_table->vdev->num: %d\n", rsc_table->vdev->num);
+//	printk("rsc_table->vdev->align: %d\n", rsc_table->vdev->align);
+
 	/* Pass resource table to remoteproc */
 	ret = remoteproc_set_rsc_table(&rproc_inst, (struct resource_table *)rsc_table, rsc_size);
 	if (ret) {
@@ -288,6 +295,8 @@ void app_rpmsg_client_sample(void *arg1, void *arg2, void *arg3)
 		goto task_end;
 	}
 
+	printk("OpenAMP[remote] rpmsg_create_ept ret: %d\n", ret);
+
 	while (msg_cnt < 100) {
 		k_sem_take(&data_sc_sem,  K_FOREVER);
 		msg_cnt++;
@@ -296,6 +305,9 @@ void app_rpmsg_client_sample(void *arg1, void *arg2, void *arg3)
 		rpmsg_send(&sc_ept, sc_msg.data, sc_msg.len);
 	}
 	rpmsg_destroy_ept(&sc_ept);
+
+	virtqueue_dump(rvdev.svq);
+	virtqueue_dump(rvdev.rvq);
 
 task_end:
 	LOG_INF("OpenAMP Linux sample client responder ended");
@@ -313,6 +325,9 @@ void app_rpmsg_tty(void *arg1, void *arg2, void *arg3)
 	k_sem_take(&data_tty_sem,  K_FOREVER);
 
 	LOG_INF("OpenAMP[remote] Linux TTY responder started");
+
+//	volatile int *x = 0x80000004;
+//	*x = 0x1234;
 
 	tty_ept.priv = &tty_msg;
 	ret = rpmsg_create_ept(&tty_ept, rpdev, "rpmsg-tty",
@@ -376,7 +391,9 @@ void rpmsg_mng_task(void *arg1, void *arg2, void *arg3)
 
 	/* start the rpmsg clients */
 	k_sem_give(&data_sc_sem);
+#ifndef CONFIG_SHELL_BACKEND_RPMSG
 	k_sem_give(&data_tty_sem);
+#endif
 
 	while (1) {
 		receive_message(&msg, &len);
