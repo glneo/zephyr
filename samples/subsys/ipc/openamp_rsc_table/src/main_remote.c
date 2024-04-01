@@ -90,7 +90,7 @@ static K_SEM_DEFINE(data_tty_sem, 0, 1);
 static void platform_ipm_callback(const struct device *dev, void *context,
 				  uint32_t id, volatile void *data)
 {
-	LOG_DBG("%s: msg received from mb %d", __func__, id);
+	LOG_DBG("msg received from mb %d: data: 0x%08x, size: %d", id, *((uint32_t *)data), 4);
 	k_sem_give(&data_sem);
 }
 
@@ -137,7 +137,7 @@ int mailbox_notify(struct remoteproc *rproc, uint32_t id)
 {
 	ARG_UNUSED(rproc);
 
-	LOG_DBG("%s: msg received", __func__);
+	LOG_DBG("msg to send to host with id: %d", id);
 	ipm_send(ipm_handle, 0, id, &id, 4);
 
 	return 0;
@@ -279,6 +279,9 @@ void app_rpmsg_client_sample(void *arg1, void *arg2, void *arg3)
 		rpmsg_send(&sc_ept, sc_msg.data, sc_msg.len);
 	}
 	rpmsg_destroy_ept(&sc_ept);
+
+	virtqueue_dump(rvdev.svq);
+	virtqueue_dump(rvdev.rvq);
 
 task_end:
 	LOG_INF("OpenAMP Linux sample client responder ended");
