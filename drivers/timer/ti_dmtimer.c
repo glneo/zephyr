@@ -21,7 +21,7 @@
 
 #define TIMER_IRQ_NUM   DT_INST_IRQN(0)
 #define TIMER_IRQ_PRIO  DT_INST_IRQ(0, priority)
-#define TIMER_IRQ_FLAGS DT_INST_IRQ(0, flags)
+#define TIMER_IRQ_FLAGS DT_INST_IRQ(0, sense)
 
 #define CYC_PER_TICK ((uint32_t)(sys_clock_hw_cycles_per_sec() \
 				/ CONFIG_SYS_CLOCK_TICKS_PER_SEC))
