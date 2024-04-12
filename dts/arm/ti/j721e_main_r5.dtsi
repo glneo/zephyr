@@ -75,6 +75,17 @@
 		status = "disabled";
 	};
 
+	mbox: mailbox0@29000000 {
+		compatible = "ti,omap-mailbox";
+		reg = <0x29000000 0x200>;
+		/* TODO: Find the right IRQ number */
+		interrupts = <0 4 IRQ_TYPE_LEVEL IRQ_DEFAULT_PRIORITY>;
+		interrupt-parent = <&vim>;
+		user_id = <2>;
+		#mbox-cells = <1>;
+		status = "okay";
+	};
+
 	systick_timer: timer@24c0000 {
 		compatible = "ti,am654-timer";
 		reg = <0x24c0000 0x70>;
