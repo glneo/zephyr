@@ -1,0 +1,17 @@
+# Copyright (c) 2024 Texas Instruments Incorporated
+#	Andrew Davis <afd@ti.com>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+identifier: beagley_ai/j722s/main_r5
+name: BeagleY-AI MAIN domain R5
+type: mcu
+arch: arm
+ram: 32
+toolchain:
+  - zephyr
+  - gnuarmemb
+  - xtools
+supported:
+  - uart
+vendor: beagle
