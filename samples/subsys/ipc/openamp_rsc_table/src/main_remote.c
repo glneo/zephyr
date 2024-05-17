@@ -138,7 +138,7 @@ int mailbox_notify(struct remoteproc *rproc, uint32_t id)
 	ARG_UNUSED(rproc);
 
 	LOG_DBG("%s: msg received", __func__);
-	ipm_send(ipm_handle, 0, id, NULL, 0);
+	ipm_send(ipm_handle, 0, id, &id, 4);
 
 	return 0;
 }
