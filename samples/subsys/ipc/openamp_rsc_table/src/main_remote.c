@@ -87,10 +87,31 @@ static K_SEM_DEFINE(data_sem, 0, 1);
 static K_SEM_DEFINE(data_sc_sem, 0, 1);
 static K_SEM_DEFINE(data_tty_sem, 0, 1);
 
+enum omap_rp_mbox_messages {
+	RP_MBOX_READY		= 0xFFFFFF00,
+	RP_MBOX_PENDING_MSG	= 0xFFFFFF01,
+	RP_MBOX_CRASH		= 0xFFFFFF02,
+	RP_MBOX_ECHO_REQUEST	= 0xFFFFFF03,
+	RP_MBOX_ECHO_REPLY	= 0xFFFFFF04,
+	RP_MBOX_ABORT_REQUEST	= 0xFFFFFF05,
+	RP_MBOX_SUSPEND_AUTO	= 0xFFFFFF10,
+	RP_MBOX_SUSPEND_SYSTEM	= 0xFFFFFF11,
+	RP_MBOX_SUSPEND_ACK	= 0xFFFFFF12,
+	RP_MBOX_SUSPEND_CANCEL	= 0xFFFFFF13,
+	RP_MBOX_SHUTDOWN	= 0xFFFFFF14,
+	RP_MBOX_SHUTDOWN_ACK	= 0xFFFFFF15,
+	RP_MBOX_END_MSG		= 0xFFFFFF16,
+};
+
 static void platform_ipm_callback(const struct device *dev, void *context,
 				  uint32_t id, volatile void *data)
 {
 	LOG_DBG("msg received from mb %d: data: 0x%08x, size: %d", id, *((uint32_t *)data), 4);
+
+	/* Ignore echo requests for now */
+	if (*((uint32_t *)data) == RP_MBOX_ECHO_REQUEST)
+		return;
+
 	k_sem_give(&data_sem);
 }
 
