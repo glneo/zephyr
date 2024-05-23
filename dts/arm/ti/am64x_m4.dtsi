@@ -67,6 +67,15 @@
 		status = "disabled";
 	};
 
+	mbox6: mailbox@29060000 {
+		compatible = "ti,omap-mailbox";
+		reg = <0x29060000 0x200>;
+		interrupts = <56 4>;
+		interrupt-parent = <&nvic>;
+		usr-id = <3>;
+		#mbox-cells = <1>;
+	};
+
 	gpio0: gpio@4201010 {
 		compatible = "ti,davinci-gpio";
 		reg = <0x4201010 0x100>;
