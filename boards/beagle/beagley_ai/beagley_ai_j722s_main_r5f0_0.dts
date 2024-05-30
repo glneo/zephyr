@@ -16,8 +16,9 @@
 	compatible = "beagle,beagley-ai";
 
 	chosen {
-		zephyr,sram = &atcm;
+		zephyr,sram = &ddr1;
 		zephyr,console = &uart1;
+		zephyr,shell-uart = &uart1;
 	};
 
 	cpus {
