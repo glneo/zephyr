@@ -17,8 +17,6 @@
 
 	chosen {
 		zephyr,sram = &ddr1;
-		zephyr,console = &uart1;
-		zephyr,shell-uart = &uart1;
 		zephyr,ipc = &ipc0;
 		zephyr,ipc_shm = &ddr0;
 	};
@@ -54,7 +52,6 @@
 };
 
 &uart1 {
-	status = "okay";
 	pinctrl-0 = <&uart1_tx_default &uart1_rx_default>;
 	pinctrl-names = "default";
 	current-speed = <115200>;
