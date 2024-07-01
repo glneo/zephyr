@@ -60,7 +60,7 @@
 		reg = <0x02060000 0x1000>;
 		interrupts = <0 238 IRQ_TYPE_LEVEL IRQ_DEFAULT_PRIORITY>;
 		interrupt-parent = <&vim>;
-		reg-shift = <2>;
+		reg-shift = <0>;
 		clock-frequency = <400000>;
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -88,15 +88,14 @@
 		status = "disabled";
 	};
 
-	mbox: mailbox0@29000000 {
+	mbox: mailbox0@31f81000 {
 		compatible = "ti,omap-mailbox";
-		reg = <0x29000000 0x200>;
-		/* TODO: Find the right IRQ number */
-		interrupts = <0 4 IRQ_TYPE_LEVEL IRQ_DEFAULT_PRIORITY>;
+		reg = <0x31f81000 0x200>;
+		interrupts = <0 224 IRQ_TYPE_LEVEL IRQ_DEFAULT_PRIORITY>;
 		interrupt-parent = <&vim>;
 		user_id = <2>;
 		#mbox-cells = <1>;
-		status = "okay";
+		status = "disabled";
 	};
 
 	systick_timer: timer@24c0000 {

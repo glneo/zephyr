@@ -4,11 +4,11 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
-#include <zephyr/logging/log.h>
 #include <zephyr/irq.h>
 #include <zephyr/drivers/i2c.h>
 
-LOG_MODULE_REGISTER(omap_i2c);
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(omap_i2c, LOG_LEVEL_DBG);
 
 struct i2c_omap_cfg {
 	mm_reg_t base;
@@ -190,13 +190,13 @@ static int omap_i2c_xfer_data(const struct device *dev);
 static inline void omap_i2c_write_reg(const struct i2c_omap_cfg *cfg, struct i2c_omap_data *data,
 				      int reg, uint16_t val)
 {
-	sys_write16(val, cfg->base + (data->regs[reg] << cfg->reg_shift));
+	sys_write16(val, cfg->base + reg);
 }
 
 static inline uint16_t omap_i2c_read_reg(const struct i2c_omap_cfg *cfg, struct i2c_omap_data *data,
 					 int reg)
 {
-	return sys_read16(cfg->base + (data->regs[reg] << cfg->reg_shift));
+	return sys_read16(cfg->base + reg);
 }
 
 static void __omap_i2c_init(const struct device *dev)
@@ -259,6 +259,7 @@ static int omap_i2c_reset(const struct device *dev)
 
 static int omap_i2c_init(const struct device *dev)
 {
+	const struct i2c_omap_cfg *cfg = dev->config;
 	struct i2c_omap_data *data = dev->data;
 	uint16_t psc = 0, scll = 0, sclh = 0;
 	unsigned long fclk_rate = 12000000;
@@ -355,6 +356,11 @@ static int omap_i2c_init(const struct device *dev)
 	data->scllstate = scll;
 	data->sclhstate = sclh;
 
+	uint16_t rev_low = omap_i2c_read_reg(cfg, data, I2C_REVNB_LO);
+	uint16_t rev_high = omap_i2c_read_reg(cfg, data, I2C_REVNB_HI);
+
+	LOG_DBG("I2C OMAP init called, REV_LO: 0x%08x, REV_HI: 0x%08x", rev_low, rev_high);
+
 	__omap_i2c_init(dev);
 
 	return 0;
@@ -369,6 +375,8 @@ static int omap_i2c_transmit_data(const struct device *dev, uint8_t num_bytes, b
 	while (num_bytes--) {
 		w = *data->buf++;
 		data->buf_len--;
+
+		LOG_DBG("Writing: 0x%04x", w);
 
 		omap_i2c_write_reg(cfg, data, I2C_DATA, w);
 	}
@@ -419,18 +427,22 @@ static void omap_i2c_resize_fifo(const struct device *dev, uint8_t size, bool is
 	}
 }
 
-static void omap_i2c_wait(const struct device *dev)
+static int omap_i2c_wait(const struct device *dev)
 {
 	const struct i2c_omap_cfg *cfg = dev->config;
 	struct i2c_omap_data *data = dev->data;
 	uint16_t stat;
-	uint16_t mask = omap_i2c_read_reg(cfg, data, I2C_IE);
+//	uint16_t mask = omap_i2c_read_reg(cfg, data, I2C_IE);
 	int count = 0;
 
-	do {
+	for (count = 0; count < 5; count++) {
 		stat = omap_i2c_read_reg(cfg, data, I2C_STAT);
+		if (stat)
+			return 0;
 		count++;
-	} while (!(stat & mask) && count < 5);
+	}
+
+	return -EAGAIN;
 }
 
 static int omap_i2c_xfer_msg(const struct device *dev, struct i2c_msg *msg, int stop, bool polling,
@@ -449,6 +461,9 @@ static int omap_i2c_xfer_msg(const struct device *dev, struct i2c_msg *msg, int 
 	omap_i2c_write_reg(cfg, data, I2C_SA, addr);
 	data->buf = msg->buf;
 	data->buf_len = msg->len;
+
+	LOG_DBG("Message len: %d", msg->len);
+
 	/* make sure writes to data->buf_len are ordered */
 
 	compiler_barrier();
@@ -513,44 +528,51 @@ static int omap_i2c_xfer_msg(const struct device *dev, struct i2c_msg *msg, int 
 			time_left = -ETIMEDOUT; // or any other timeout handling
 		}
 	} else {
-		do {
-			omap_i2c_wait(dev);
+		for (time_left = 5; time_left; time_left--) {
+			ret = omap_i2c_wait(dev);
+			if (ret == -EAGAIN)
+				continue;
 			ret = omap_i2c_xfer_data(dev);
-		} while (ret == -EAGAIN);
-		{
-			time_left = !ret;
+			if (ret == -EAGAIN)
+				break;
+		}
+		if (time_left == 0) {
+			omap_i2c_reset(dev);
+			__omap_i2c_init(dev);
+			LOG_DBG("Exiting at line %d", __LINE__);
+			return -ETIMEDOUT;
 		}
 	}
 
-	if (time_left == 0) {
-		omap_i2c_reset(dev);
-		__omap_i2c_init(dev);
-		return -ETIMEDOUT;
-	}
-
-	if (likely(!data->cmd_err)) {
+	if (!data->cmd_err) {
+		LOG_DBG("Exiting at line %d", __LINE__);
 		return 0;
 	}
 
 	if (data->cmd_err & (OMAP_I2C_STAT_ROVR | OMAP_I2C_STAT_XUDF)) {
 		omap_i2c_reset(dev);
 		__omap_i2c_init(dev);
+		LOG_DBG("Exiting at line %d", __LINE__);
 		return -EIO;
 	}
 	if (data->cmd_err & OMAP_I2C_STAT_AL) {
+		LOG_DBG("Exiting at line %d", __LINE__);
 		return -EAGAIN;
 	}
 
 	if (data->cmd_err & OMAP_I2C_STAT_NACK) {
 		if (msg->flags) {
+			LOG_DBG("Exiting at line %d", __LINE__);
 			return 0;
 		}
 
 		w = omap_i2c_read_reg(cfg, data, I2C_CON);
 		w |= OMAP_I2C_CON_STP;
 		omap_i2c_write_reg(cfg, data, I2C_CON, w);
+		LOG_DBG("Exiting at line %d", __LINE__);
 		return -EREMOTE;
 	}
+	LOG_DBG("Exiting at line %d", __LINE__);
 	return -EIO;
 }
 static inline void omap_i2c_ack_stat(const struct device *dev, uint16_t stat)
@@ -566,10 +588,16 @@ static int omap_i2c_xfer_data(const struct device *dev)
 	uint16_t bits, stat;
 	int err = 0, count = 0;
 
+	data->cmd_err = 0;
+
 	do {
-		bits = omap_i2c_read_reg(cfg, data, I2C_IE);
+//		bits = omap_i2c_read_reg(cfg, data, I2C_IE);
+		omap_i2c_wait(dev);
 		stat = omap_i2c_read_reg(cfg, data, I2C_STAT);
-		stat &= bits;
+//		stat &= bits;
+
+		stat &= ~(OMAP_I2C_STAT_BF);
+
 		/* If we're in receiver mode, ignore XDR/XRDY */
 		if (data->receiver) {
 			stat &= ~(OMAP_I2C_STAT_XDR | OMAP_I2C_STAT_XRDY);
@@ -580,6 +608,7 @@ static int omap_i2c_xfer_data(const struct device *dev)
 		if (!stat) {
 			/* my work here is done */
 			err = -EAGAIN;
+			LOG_DBG("STAT empty");
 			break;
 		}
 		LOG_DBG("IRQ (ISR = 0x%04x)", stat);
@@ -589,13 +618,13 @@ static int omap_i2c_xfer_data(const struct device *dev)
 		}
 
 		if (stat & OMAP_I2C_STAT_NACK) {
-			err |= OMAP_I2C_STAT_NACK;
+			data->cmd_err |= OMAP_I2C_STAT_NACK;
 			omap_i2c_ack_stat(dev, OMAP_I2C_STAT_NACK);
 		}
 
 		if (stat & OMAP_I2C_STAT_AL) {
 			LOG_ERR("Arbitration lost");
-			err |= OMAP_I2C_STAT_AL;
+			data->cmd_err |= OMAP_I2C_STAT_AL;
 			omap_i2c_ack_stat(dev, OMAP_I2C_STAT_AL);
 		}
 
@@ -669,14 +698,14 @@ static int omap_i2c_xfer_data(const struct device *dev)
 
 		if (stat & OMAP_I2C_STAT_ROVR) {
 			LOG_ERR("Receive overrun");
-			err |= OMAP_I2C_STAT_ROVR;
+			data->cmd_err |= OMAP_I2C_STAT_ROVR;
 			omap_i2c_ack_stat(dev, OMAP_I2C_STAT_ROVR);
 			break;
 		}
 
 		if (stat & OMAP_I2C_STAT_XUDF) {
 			LOG_ERR("Transmit underflow");
-			err |= OMAP_I2C_STAT_XUDF;
+			data->cmd_err |= OMAP_I2C_STAT_XUDF;
 			omap_i2c_ack_stat(dev, OMAP_I2C_STAT_XUDF);
 			break;
 		}
@@ -731,7 +760,7 @@ static int __maybe_unused omap_i2c_get_scl(struct device *dev)
 	struct i2c_omap_cfg *cfg = dev->config;
 	uint32_t reg;
 
-	reg = omap_i2c_read_reg(dev, I2C_SYSTEST);
+	reg = omap_i2c_read_reg(cfg, data, I2C_SYSTEST);
 
 	return reg & OMAP_I2C_SYSTEST_SCL_I_FUNC;
 }
@@ -742,13 +771,13 @@ static int __maybe_unused omap_i2c_get_sda(struct device *dev)
 	struct i2c_omap_cfg *cfg = dev->config;
 	uint32_t reg;
 
-	reg = omap_i2c_read_reg(dev, I2C_SYSTEST);
+	reg = omap_i2c_read_reg(cfg, data, I2C_SYSTEST);
 
 	return reg & OMAP_I2C_SYSTEST_SDA_I_FUNC;
 }
 
 static const struct i2c_driver_api omap_i2c_api = {
-	.transfer = omap_i2c_transfer,
+	.transfer = omap_i2c_transfer_polling,
 };
 
 #define I2C_OMAP_INIT(inst)                                                                        \
