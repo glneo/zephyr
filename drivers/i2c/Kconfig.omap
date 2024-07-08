@@ -1,0 +1,5 @@
+config I2C_OMAP
+	bool "TI OMAP I2C Driver"
+	default y
+	help
+		Enable the I2C driver for TI OMAP SoCs.
