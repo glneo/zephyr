@@ -713,10 +713,38 @@ static int omap_i2c_xfer_common(const struct device *dev, struct i2c_msg msg[], 
 	return r;
 }
 
-static int omap_i2c_transfer(const struct device *dev, struct i2c_msg msgs[], uint8_t num_msgs,
+static int omap_i2c_transfer_irq(const struct device *dev, struct i2c_msg msgs[], uint8_t num_msgs,
 			     uint16_t addr)
 {
 	return omap_i2c_xfer_common(dev, msgs, num_msgs, false, addr);
+}
+
+static int omap_i2c_transfer_polling(const struct device *dev, struct i2c_msg msgs[], uint8_t num_msgs,
+			     uint16_t addr)
+{
+	return omap_i2c_xfer_common(dev, msgs, num_msgs, true, addr);
+}
+
+static int __maybe_unused omap_i2c_get_scl(struct device *dev)
+{
+	struct i2c_omap_data *data = dev->data;
+	struct i2c_omap_cfg *cfg = dev->config;
+	uint32_t reg;
+
+	reg = omap_i2c_read_reg(dev, I2C_SYSTEST);
+
+	return reg & OMAP_I2C_SYSTEST_SCL_I_FUNC;
+}
+
+static int __maybe_unused omap_i2c_get_sda(struct device *dev)
+{
+	struct i2c_omap_data *data = dev->data;
+	struct i2c_omap_cfg *cfg = dev->config;
+	uint32_t reg;
+
+	reg = omap_i2c_read_reg(dev, I2C_SYSTEST);
+
+	return reg & OMAP_I2C_SYSTEST_SDA_I_FUNC;
 }
 
 static const struct i2c_driver_api omap_i2c_api = {
