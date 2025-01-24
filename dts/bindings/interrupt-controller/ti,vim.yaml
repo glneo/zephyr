@@ -18,5 +18,5 @@ properties:
 interrupt-cells:
   - type
   - irq
-  - flags
+  - sense
   - priority
