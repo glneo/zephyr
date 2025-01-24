@@ -19,7 +19,7 @@
 
 #define TIMER_IRQ_NUM   DT_INST_IRQN(0)
 #define TIMER_IRQ_PRIO  DT_INST_IRQ(0, priority)
-#define TIMER_IRQ_FLAGS DT_INST_IRQ(0, flags)
+#define TIMER_IRQ_FLAGS DT_INST_IRQ(0, sense)
 
 #if defined(CONFIG_TEST)
 const int32_t z_sys_timer_irq_for_test = TIMER_IRQ_NUM;
