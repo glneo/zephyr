@@ -359,7 +359,12 @@ void rpmsg_mng_task(void *arg1, void *arg2, void *arg3)
 
 	/* start the rpmsg clients */
 	k_sem_give(&data_sc_sem);
-	k_sem_give(&data_tty_sem);
+
+	/* Start TTY responder if it doesn't conflict with shell endpoint */
+	if (!IS_ENABLED(CONFIG_SHELL_BACKEND_RPMSG) ||
+	    !strcmp(CONFIG_SHELL_RPMSG_SERVICE_NAME, "rpmsg-tty")) {
+		k_sem_give(&data_tty_sem);
+	}
 
 	while (1) {
 		receive_message(&msg, &len);
