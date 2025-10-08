@@ -45,19 +45,18 @@ struct ti_dm_timer_data {
 static const struct device *systick_timer_dev;
 
 #define TI_DM_TIMER_MASK(reg)  TI_DM_TIMER_##reg##_MASK
-#define TI_DM_TIMER_SHIFT(reg) TI_DM_TIMER_##reg##_SHIFT
 
 #define TI_DM_TIMER_READ(dev, reg) sys_read32(DEVICE_MMIO_GET(dev) + TI_DM_TIMER_##reg)
 #define TI_DM_TIMER_WRITE(dev, data, reg, bits)                                                    \
 	ti_dm_timer_write_masks(data, DEVICE_MMIO_GET(dev) + TI_DM_TIMER_##reg,                    \
-				TI_DM_TIMER_MASK(reg##_##bits), TI_DM_TIMER_SHIFT(reg##_##bits))
+				TI_DM_TIMER_MASK(reg##_##bits))
 
-static void ti_dm_timer_write_masks(uint32_t data, uint32_t reg, uint32_t mask, uint32_t shift)
+static void ti_dm_timer_write_masks(uint32_t data, uint32_t reg, uint32_t mask)
 {
 	uint32_t reg_val;
 
 	reg_val = sys_read32(reg);
-	reg_val = (reg_val & ~(mask)) | (data << shift);
+	reg_val = (reg_val & ~(mask)) | FIELD_PREP(mask, data);
 	sys_write32(reg_val, reg);
 }
 
