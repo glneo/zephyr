@@ -26,8 +26,6 @@ LOG_MODULE_REGISTER(ssd16xx);
  */
 
 #define EPD_PANEL_NUMOF_ROWS_PER_PAGE	8
-#define SSD16XX_PANEL_FIRST_PAGE	0
-#define SSD16XX_PANEL_FIRST_GATE	0
 #define SSD16XX_PIXELS_PER_BYTE		8
 #define SSD16XX_DEFAULT_TR_VALUE	25U
 #define SSD16XX_TR_SCALE_FACTOR		256U
@@ -64,7 +62,7 @@ struct ssd16xx_quirks {
 
 struct ssd16xx_data {
 	bool read_supported;
-	uint8_t scan_mode;
+//	uint8_t scan_mode;
 	bool blanking_on;
 	enum ssd16xx_profile_type profile;
 	enum display_orientation orientation;
@@ -115,11 +113,15 @@ static inline void ssd16xx_busy_wait(const struct device *dev)
 	const struct ssd16xx_config *config = dev->config;
 	int pin = gpio_pin_get_dt(&config->busy_gpio);
 
+	LOG_DBG("Before Busy");
+
 	while (pin > 0) {
 		__ASSERT(pin >= 0, "Failed to get pin level");
 		k_msleep(SSD16XX_BUSY_DELAY);
 		pin = gpio_pin_get_dt(&config->busy_gpio);
 	}
+
+	LOG_DBG("After Busy");
 }
 
 static inline int ssd16xx_write_cmd(const struct device *dev, uint8_t cmd,
@@ -129,6 +131,18 @@ static inline int ssd16xx_write_cmd(const struct device *dev, uint8_t cmd,
 	int err;
 
 	ssd16xx_busy_wait(dev);
+
+//	if (!(cmd == 0x24 || cmd == 0x26)) {
+//		printf("SPI CMD: 0x%02x (", cmd);
+//
+//		if (cmd == 0x24 || cmd == 0x26)
+//			printf("...");
+//		else
+//			for (int i = 0; i < len; i++)
+//				printf("0x%02x ", data[i]);
+//
+//		printf(")\n");
+//	}
 
 	err = mipi_dbi_command_write(config->mipi_dev, &config->dbi_config,
 				      cmd, data, len);
@@ -142,21 +156,21 @@ static inline int ssd16xx_write_uint8(const struct device *dev, uint8_t cmd,
 	return ssd16xx_write_cmd(dev, cmd, &data, 1);
 }
 
-static inline int ssd16xx_read_cmd(const struct device *dev, uint8_t cmd,
-				    uint8_t *data, size_t len)
-{
-	const struct ssd16xx_config *config = dev->config;
-	const struct ssd16xx_data *dev_data = dev->data;
-
-	if (!dev_data->read_supported) {
-		return -ENOTSUP;
-	}
-
-	ssd16xx_busy_wait(dev);
-
-	return mipi_dbi_command_read(config->mipi_dev, &config->dbi_config,
-				     &cmd, 1, data, len);
-}
+//static inline int ssd16xx_read_cmd(const struct device *dev, uint8_t cmd,
+//				    uint8_t *data, size_t len)
+//{
+//	const struct ssd16xx_config *config = dev->config;
+//	const struct ssd16xx_data *dev_data = dev->data;
+//
+//	if (!dev_data->read_supported) {
+//		return -ENOTSUP;
+//	}
+//
+//	ssd16xx_busy_wait(dev);
+//
+//	return mipi_dbi_command_read(config->mipi_dev, &config->dbi_config,
+//				     &cmd, 1, data, len);
+//}
 
 static inline size_t push_x_param(const struct device *dev,
 				  uint8_t *data, uint16_t x)
@@ -208,6 +222,8 @@ static inline int ssd16xx_set_ram_param(const struct device *dev,
 	uint8_t tmp[4];
 	size_t len;
 
+//	printf("Setting start x: %d, end x: %d, start y: %d, end y: %d\n", sx, ex, sy, ey);
+
 	len  = push_x_param(dev, tmp, sx);
 	len += push_x_param(dev, tmp + len, ex);
 	err = ssd16xx_write_cmd(dev, SSD16XX_CMD_RAM_XPOS_CTRL, tmp, len);
@@ -217,7 +233,7 @@ static inline int ssd16xx_set_ram_param(const struct device *dev,
 
 	len  = push_y_param(dev, tmp, sy);
 	len += push_y_param(dev, tmp + len, ey);
-	err = ssd16xx_write_cmd(dev, SSD16XX_CMD_RAM_YPOS_CTRL, tmp,	len);
+	err = ssd16xx_write_cmd(dev, SSD16XX_CMD_RAM_YPOS_CTRL, tmp, len);
 	if (err < 0) {
 		return err;
 	}
@@ -260,17 +276,25 @@ static int ssd16xx_update_display(const struct device *dev)
 	const struct ssd16xx_data *data = dev->data;
 	const struct ssd16xx_profile *p = config->profiles[data->profile];
 	const struct ssd16xx_quirks *quirks = config->quirks;
-	const bool load_lut = !p || p->lut.len == 0;
+	bool load_lut = !p || p->lut.len == 0;
 	const bool load_temp = load_lut && config->tssv;
-	const bool partial = data->profile == SSD16XX_PROFILE_PARTIAL;
+	bool partial = data->profile == SSD16XX_PROFILE_PARTIAL;
+
+	static bool first_partial = true;
+
+	bool later_partial = partial && !first_partial;
+
 	const uint8_t update_cmd =
 		SSD16XX_CTRL2_ENABLE_CLK |
 		SSD16XX_CTRL2_ENABLE_ANALOG |
-		(load_lut ? SSD16XX_CTRL2_LOAD_LUT : 0) |
-		(load_temp ? SSD16XX_CTRL2_LOAD_TEMPERATURE : 0) |
+		((load_lut && !later_partial) ? SSD16XX_CTRL2_LOAD_LUT : 0) |
+		((load_temp && !later_partial) ? SSD16XX_CTRL2_LOAD_TEMPERATURE : 0) |
 		(partial ? quirks->ctrl2_partial : quirks->ctrl2_full) |
 		SSD16XX_CTRL2_DISABLE_ANALOG |
 		SSD16XX_CTRL2_DISABLE_CLK;
+
+	if (first_partial && partial)
+		first_partial = false;
 
 	return ssd16xx_activate(dev, update_cmd);
 }
@@ -291,11 +315,11 @@ static int ssd16xx_blanking_on(const struct device *dev)
 {
 	struct ssd16xx_data *data = dev->data;
 
-	if (!data->blanking_on) {
-		if (ssd16xx_set_profile(dev, SSD16XX_PROFILE_FULL)) {
-			return -EIO;
-		}
-	}
+//	if (!data->blanking_on) {
+//		if (ssd16xx_set_profile(dev, SSD16XX_PROFILE_FULL)) {
+//			return -EIO;
+//		}
+//	}
 
 	data->blanking_on = true;
 
@@ -326,6 +350,8 @@ static int ssd16xx_set_window(const struct device *dev,
 		return -ENOTSUP;
 	}
 
+//	printf("Window start x: %d, width: %d, start y: %d, height: %d, pitch: %d\n", x, desc->width, y, desc->height, desc->pitch);
+
 	if (data->orientation == DISPLAY_ORIENTATION_NORMAL ||
 	    data->orientation == DISPLAY_ORIENTATION_ROTATED_180) {
 		if ((y + desc->height) > panel_h) {
@@ -337,14 +363,13 @@ static int ssd16xx_set_window(const struct device *dev,
 			LOG_ERR("Buffer out of bounds (width)");
 			return -EINVAL;
 		}
-
-		if ((desc->height % EPD_PANEL_NUMOF_ROWS_PER_PAGE) != 0U) {
-			LOG_ERR("Buffer height not multiple of %d", EPD_PANEL_NUMOF_ROWS_PER_PAGE);
+		if ((desc->width % SSD16XX_PIXELS_PER_BYTE) != 0U) {
+			LOG_ERR("Buffer width not multiple of %d", SSD16XX_PIXELS_PER_BYTE);
 			return -EINVAL;
 		}
 
-		if ((y % EPD_PANEL_NUMOF_ROWS_PER_PAGE) != 0U) {
-			LOG_ERR("Y coordinate not multiple of %d", EPD_PANEL_NUMOF_ROWS_PER_PAGE);
+		if ((x % SSD16XX_PIXELS_PER_BYTE) != 0U) {
+			LOG_ERR("X coordinate not multiple of %d", SSD16XX_PIXELS_PER_BYTE);
 			return -EINVAL;
 		}
 	} else {
@@ -358,23 +383,23 @@ static int ssd16xx_set_window(const struct device *dev,
 			return -EINVAL;
 		}
 
-		if ((desc->width % SSD16XX_PIXELS_PER_BYTE) != 0U) {
-			LOG_ERR("Buffer width not multiple of %d", SSD16XX_PIXELS_PER_BYTE);
+		if ((desc->height % EPD_PANEL_NUMOF_ROWS_PER_PAGE) != 0U) {
+			LOG_ERR("Buffer height not multiple of %d", EPD_PANEL_NUMOF_ROWS_PER_PAGE);
 			return -EINVAL;
 		}
 
-		if ((x % SSD16XX_PIXELS_PER_BYTE) != 0U) {
-			LOG_ERR("X coordinate not multiple of %d", SSD16XX_PIXELS_PER_BYTE);
+		if ((y % EPD_PANEL_NUMOF_ROWS_PER_PAGE) != 0U) {
+			LOG_ERR("Y coordinate not multiple of %d", EPD_PANEL_NUMOF_ROWS_PER_PAGE);
 			return -EINVAL;
 		}
 	}
 
 	switch (data->orientation) {
 	case DISPLAY_ORIENTATION_NORMAL:
-		x_start = (panel_h - 1 - y) / SSD16XX_PIXELS_PER_BYTE;
-		x_end = (panel_h - 1 - (y + desc->height - 1)) / SSD16XX_PIXELS_PER_BYTE;
-		y_start = x;
-		y_end = (x + desc->width - 1);
+		x_start = x / SSD16XX_PIXELS_PER_BYTE;
+		x_end = (x + desc->width - 1) / SSD16XX_PIXELS_PER_BYTE;
+		y_start = y;
+		y_end = (y + desc->height - 1);
 		break;
 	case DISPLAY_ORIENTATION_ROTATED_90:
 		x_start = (panel_h - 1 - x) / SSD16XX_PIXELS_PER_BYTE;
@@ -389,10 +414,10 @@ static int ssd16xx_set_window(const struct device *dev,
 		y_end = x;
 		break;
 	case DISPLAY_ORIENTATION_ROTATED_270:
-		x_start = x / SSD16XX_PIXELS_PER_BYTE;
-		x_end = (x + desc->width - 1) / SSD16XX_PIXELS_PER_BYTE;
-		y_start = y;
-		y_end = (y + desc->height - 1);
+		x_start = (panel_h - 1 - y) / SSD16XX_PIXELS_PER_BYTE;
+		x_end = (panel_h - 1 - (y + desc->height - 1)) / SSD16XX_PIXELS_PER_BYTE;
+		y_start = x;
+		y_end = (x + desc->width - 1);
 		break;
 	default:
 		return -EINVAL;
@@ -411,8 +436,8 @@ static int ssd16xx_set_window(const struct device *dev,
 	return 0;
 }
 
-static int ssd16xx_write(const struct device *dev, const uint16_t x,
-			 const uint16_t y,
+static int ssd16xx_write(const struct device *dev,
+			 const uint16_t x, const uint16_t y,
 			 const struct display_buffer_descriptor *desc,
 			 const void *buf)
 {
@@ -420,7 +445,7 @@ static int ssd16xx_write(const struct device *dev, const uint16_t x,
 	const struct ssd16xx_data *data = dev->data;
 	const bool have_partial_refresh =
 		config->profiles[SSD16XX_PROFILE_PARTIAL] != NULL;
-	const bool partial_refresh = !data->blanking_on && have_partial_refresh;
+//	const bool partial_refresh = !data->blanking_on && have_partial_refresh;
 	const size_t buf_len = MIN(desc->buf_size,
 				   desc->height * desc->width / 8);
 	int err;
@@ -430,16 +455,16 @@ static int ssd16xx_write(const struct device *dev, const uint16_t x,
 		return -EINVAL;
 	}
 
-	if (partial_refresh) {
-		/*
-		 * Request the partial profile. This operation becomes
-		 * a no-op if the profile is already active.
-		 */
-		err = ssd16xx_set_profile(dev, SSD16XX_PROFILE_PARTIAL);
-		if (err < 0) {
-			return -EIO;
-		}
-	}
+//	if (!data->blanking_on && have_partial_refresh) {
+//		/*
+//		 * Request the partial profile. This operation becomes
+//		 * a no-op if the profile is already active.
+//		 */
+//		err = ssd16xx_set_profile(dev, SSD16XX_PROFILE_PARTIAL);
+//		if (err < 0) {
+//			return -EIO;
+//		}
+//	}
 
 	err = ssd16xx_set_window(dev, x, y, desc);
 	if (err < 0) {
@@ -457,100 +482,130 @@ static int ssd16xx_write(const struct device *dev, const uint16_t x,
 		if (err < 0) {
 			return err;
 		}
+
+		if (have_partial_refresh) {
+			/*
+			 * We just performed a partial refresh. After the
+			 * refresh, the controller swaps the black/red buffers
+			 * containing the current and new image. We need to
+			 * perform a second write here to ensure that future
+			 * updates work on an up-to-date framebuffer.
+			 */
+			err = ssd16xx_write_cmd(dev, SSD16XX_CMD_WRITE_RAM,
+						(uint8_t *)buf, buf_len);
+			if (err < 0) {
+				return err;
+			}
+		}
+	} else {
+//		if (have_partial_refresh) {
+//			/*
+//			 * We will trigger a full refresh when blanking is
+//			 * turned off. The controller won't keep track of the
+//			 * old frame buffer, which is needed to perform a
+//			 * partial update, when this happens. Maintain the old
+//			 * frame buffer manually here to make sure future
+//			 * partial updates will work as expected.
+//			 */
+//			err = ssd16xx_write_cmd(dev, SSD16XX_CMD_WRITE_RED_RAM, (uint8_t *)buf, buf_len);
+//			if (err < 0)
+//				return err;
+//		}
 	}
 
-	if (data->blanking_on && have_partial_refresh) {
-		/*
-		 * We will trigger a full refresh when blanking is
-		 * turned off. The controller won't keep track of the
-		 * old frame buffer, which is needed to perform a
-		 * partial update, when this happens. Maintain the old
-		 * frame buffer manually here to make sure future
-		 * partial updates will work as expected.
-		 */
-		err = ssd16xx_write_cmd(dev, SSD16XX_CMD_WRITE_RED_RAM,
-					(uint8_t *)buf, buf_len);
-		if (err < 0) {
-			return err;
-		}
-	} else if (partial_refresh) {
-		/*
-		 * We just performed a partial refresh. After the
-		 * refresh, the controller swaps the black/red buffers
-		 * containing the current and new image. We need to
-		 * perform a second write here to ensure that future
-		 * updates work on an up-to-date framebuffer.
-		 */
-		err = ssd16xx_write_cmd(dev, SSD16XX_CMD_WRITE_RAM,
-					(uint8_t *)buf, buf_len);
-		if (err < 0) {
-			return err;
-		}
-	}
+//	if (have_partial_refresh) {
+//		if (data->blanking_on) {
+//			/*
+//			 * We will trigger a full refresh when blanking is
+//			 * turned off. The controller won't keep track of the
+//			 * old frame buffer, which is needed to perform a
+//			 * partial update, when this happens. Maintain the old
+//			 * frame buffer manually here to make sure future
+//			 * partial updates will work as expected.
+//			 */
+//			err = ssd16xx_write_cmd(dev, SSD16XX_CMD_WRITE_RED_RAM,
+//						(uint8_t *)buf, buf_len);
+//			if (err < 0) {
+//				return err;
+//			}
+//		} else {
+//			/*
+//			 * We just performed a partial refresh. After the
+//			 * refresh, the controller swaps the black/red buffers
+//			 * containing the current and new image. We need to
+//			 * perform a second write here to ensure that future
+//			 * updates work on an up-to-date framebuffer.
+//			 */
+//			err = ssd16xx_write_cmd(dev, SSD16XX_CMD_WRITE_RAM,
+//						(uint8_t *)buf, buf_len);
+//			if (err < 0) {
+//				return err;
+//			}
+//	}
 
 	return 0;
 }
 
-int ssd16xx_read_ram(const struct device *dev, enum ssd16xx_ram ram_type,
-		     const uint16_t x, const uint16_t y,
-		     const struct display_buffer_descriptor *desc,
-		     void *buf)
-{
-	const struct ssd16xx_data *data = dev->data;
-	const size_t buf_len = MIN(desc->buf_size,
-				   desc->height * desc->width / 8);
-	int err;
-	uint8_t ram_ctrl;
-
-	if (!data->read_supported) {
-		return -ENOTSUP;
-	}
-
-	switch (ram_type) {
-	case SSD16XX_RAM_BLACK:
-		ram_ctrl = SSD16XX_RAM_READ_CTRL_BLACK;
-		break;
-
-	case SSD16XX_RAM_RED:
-		ram_ctrl = SSD16XX_RAM_READ_CTRL_RED;
-		break;
-
-	default:
-		return -EINVAL;
-	}
-
-	if (buf == NULL || buf_len == 0U) {
-		LOG_ERR("Display buffer is not available");
-		return -EINVAL;
-	}
-
-	err = ssd16xx_set_window(dev, x, y, desc);
-	if (err < 0) {
-		return err;
-	}
-
-	err = ssd16xx_write_cmd(dev, SSD16XX_CMD_RAM_READ_CTRL,
-				&ram_ctrl, sizeof(ram_ctrl));
-	if (err < 0) {
-		return err;
-	}
-
-	err = ssd16xx_read_cmd(dev, SSD16XX_CMD_READ_RAM, (uint8_t *)buf,
-			       buf_len);
-	if (err < 0) {
-		return err;
-	}
-
-	return 0;
-}
-
-static int ssd16xx_read(const struct device *dev,
-			const uint16_t x, const uint16_t y,
-			const struct display_buffer_descriptor *desc,
-			void *buf)
-{
-	return ssd16xx_read_ram(dev, SSD16XX_RAM_BLACK, x, y, desc, buf);
-}
+//int ssd16xx_read_ram(const struct device *dev, enum ssd16xx_ram ram_type,
+//		     const uint16_t x, const uint16_t y,
+//		     const struct display_buffer_descriptor *desc,
+//		     void *buf)
+//{
+//	const struct ssd16xx_data *data = dev->data;
+//	const size_t buf_len = MIN(desc->buf_size,
+//				   desc->height * desc->width / 8);
+//	int err;
+//	uint8_t ram_ctrl;
+//
+//	if (!data->read_supported) {
+//		return -ENOTSUP;
+//	}
+//
+//	switch (ram_type) {
+//	case SSD16XX_RAM_BLACK:
+//		ram_ctrl = SSD16XX_RAM_READ_CTRL_BLACK;
+//		break;
+//
+//	case SSD16XX_RAM_RED:
+//		ram_ctrl = SSD16XX_RAM_READ_CTRL_RED;
+//		break;
+//
+//	default:
+//		return -EINVAL;
+//	}
+//
+//	if (buf == NULL || buf_len == 0U) {
+//		LOG_ERR("Display buffer is not available");
+//		return -EINVAL;
+//	}
+//
+//	err = ssd16xx_set_window(dev, x, y, desc);
+//	if (err < 0) {
+//		return err;
+//	}
+//
+//	err = ssd16xx_write_cmd(dev, SSD16XX_CMD_RAM_READ_CTRL,
+//				&ram_ctrl, sizeof(ram_ctrl));
+//	if (err < 0) {
+//		return err;
+//	}
+//
+//	err = ssd16xx_read_cmd(dev, SSD16XX_CMD_READ_RAM, (uint8_t *)buf,
+//			       buf_len);
+//	if (err < 0) {
+//		return err;
+//	}
+//
+//	return 0;
+//}
+//
+//static int ssd16xx_read(const struct device *dev,
+//			const uint16_t x, const uint16_t y,
+//			const struct display_buffer_descriptor *desc,
+//			void *buf)
+//{
+//	return ssd16xx_read_ram(dev, SSD16XX_RAM_BLACK, x, y, desc, buf);
+//}
 
 static void ssd16xx_get_capabilities(const struct device *dev,
 				     struct display_capabilities *caps)
@@ -562,12 +617,12 @@ static void ssd16xx_get_capabilities(const struct device *dev,
 	caps->x_resolution = config->width;
 	caps->y_resolution = config->height -
 			     config->height % EPD_PANEL_NUMOF_ROWS_PER_PAGE;
-	caps->supported_pixel_formats = PIXEL_FORMAT_MONO10;
-	caps->current_pixel_format = PIXEL_FORMAT_MONO10;
+	caps->supported_pixel_formats = PIXEL_FORMAT_MONO01;
+	caps->current_pixel_format = PIXEL_FORMAT_MONO01;
 	caps->screen_info = SCREEN_INFO_MONO_MSB_FIRST | SCREEN_INFO_EPD;
 
-	if (data->orientation == DISPLAY_ORIENTATION_NORMAL ||
-	    data->orientation == DISPLAY_ORIENTATION_ROTATED_180) {
+	if (data->orientation == DISPLAY_ORIENTATION_ROTATED_90 ||
+	    data->orientation == DISPLAY_ORIENTATION_ROTATED_270) {
 		caps->screen_info |= SCREEN_INFO_MONO_VTILED;
 	}
 
@@ -577,7 +632,7 @@ static void ssd16xx_get_capabilities(const struct device *dev,
 static int ssd16xx_set_pixel_format(const struct device *dev,
 				    const enum display_pixel_format pf)
 {
-	if (pf == PIXEL_FORMAT_MONO10) {
+	if (pf == PIXEL_FORMAT_MONO01) {
 		return 0;
 	}
 
@@ -585,28 +640,26 @@ static int ssd16xx_set_pixel_format(const struct device *dev,
 	return -ENOTSUP;
 }
 
-static int ssd16xx_set_orientation(const struct device *dev,
-				   const enum display_orientation orientation)
+static int ssd16xx_set_orientation(const struct device *dev)
 {
 	struct ssd16xx_data *data = dev->data;
+	uint8_t scan_mode = SSD16XX_DATA_ENTRY_XIYIX;
 	int err;
 
-	if (orientation == DISPLAY_ORIENTATION_NORMAL) {
-		data->scan_mode = SSD16XX_DATA_ENTRY_XDYIY;
-	} else if (orientation == DISPLAY_ORIENTATION_ROTATED_90) {
-		data->scan_mode = SSD16XX_DATA_ENTRY_XDYDX;
-	} else if (orientation == DISPLAY_ORIENTATION_ROTATED_180) {
-		data->scan_mode = SSD16XX_DATA_ENTRY_XIYDY;
-	} else if (orientation == DISPLAY_ORIENTATION_ROTATED_270) {
-		data->scan_mode = SSD16XX_DATA_ENTRY_XIYIX;
+	if (data->orientation == DISPLAY_ORIENTATION_NORMAL) {
+		scan_mode = SSD16XX_DATA_ENTRY_XIYIX;
+	} else if (data->orientation == DISPLAY_ORIENTATION_ROTATED_90) {
+		scan_mode = SSD16XX_DATA_ENTRY_XDYDX;
+	} else if (data->orientation == DISPLAY_ORIENTATION_ROTATED_180) {
+		scan_mode = SSD16XX_DATA_ENTRY_XIYDY;
+	} else if (data->orientation == DISPLAY_ORIENTATION_ROTATED_270) {
+		scan_mode = SSD16XX_DATA_ENTRY_XIYIX;
 	}
 
-	err = ssd16xx_write_uint8(dev, SSD16XX_CMD_ENTRY_MODE, data->scan_mode);
+	err = ssd16xx_write_uint8(dev, SSD16XX_CMD_ENTRY_MODE, scan_mode);
 	if (err < 0) {
 		return err;
 	}
-
-	data->orientation = orientation;
 
 	return 0;
 }
@@ -614,33 +667,22 @@ static int ssd16xx_set_orientation(const struct device *dev,
 static int ssd16xx_clear_cntlr_mem(const struct device *dev, uint8_t ram_cmd)
 {
 	const struct ssd16xx_config *config = dev->config;
-	uint16_t panel_h = config->height / EPD_PANEL_NUMOF_ROWS_PER_PAGE;
-	uint16_t last_gate = config->width - 1;
 	uint8_t clear_page[64];
 	int err;
 
-	/*
-	 * Clear unusable memory area when the resolution of the panel is not
-	 * multiple of an octet.
-	 */
-	if (config->height % EPD_PANEL_NUMOF_ROWS_PER_PAGE) {
-		panel_h += 1;
-	}
-
-	err = ssd16xx_write_uint8(dev, SSD16XX_CMD_ENTRY_MODE,
-				  SSD16XX_DATA_ENTRY_XIYDY);
+	err = ssd16xx_write_uint8(dev, SSD16XX_CMD_ENTRY_MODE, SSD16XX_DATA_ENTRY_XIYIX);
 	if (err < 0) {
 		return err;
 	}
 
-	err = ssd16xx_set_ram_param(dev, SSD16XX_PANEL_FIRST_PAGE,
-				    panel_h - 1, last_gate,
-				    SSD16XX_PANEL_FIRST_GATE);
+	err = ssd16xx_set_ram_param(dev,
+				    0, config->width / 8,
+				    0, config->height - 1);
 	if (err < 0) {
 		return err;
 	}
 
-	err = ssd16xx_set_ram_ptr(dev, SSD16XX_PANEL_FIRST_PAGE, last_gate);
+	err = ssd16xx_set_ram_ptr(dev, 0, 0);
 	if (err < 0) {
 		return err;
 	}
@@ -655,7 +697,7 @@ static int ssd16xx_clear_cntlr_mem(const struct device *dev, uint8_t ram_cmd)
 	} else {
 		memset(clear_page, 0xff, sizeof(clear_page));
 	}
-	for (int h = 0; h < panel_h; h++) {
+	for (int h = 0; h < config->height; h++) {
 		size_t x = config->width;
 
 		while (x) {
@@ -672,7 +714,7 @@ static int ssd16xx_clear_cntlr_mem(const struct device *dev, uint8_t ram_cmd)
 	return 0;
 }
 
-static inline int ssd16xx_load_ws_from_otp_tssv(const struct device *dev)
+static int ssd16xx_load_ws_from_otp_tssv(const struct device *dev)
 {
 	const struct ssd16xx_config *config = dev->config;
 
@@ -685,7 +727,7 @@ static inline int ssd16xx_load_ws_from_otp_tssv(const struct device *dev)
 				   config->tssv);
 }
 
-static inline int ssd16xx_load_ws_from_otp(const struct device *dev)
+static int ssd16xx_load_ws_from_otp(const struct device *dev)
 {
 	int16_t t = (SSD16XX_DEFAULT_TR_VALUE * SSD16XX_TR_SCALE_FACTOR);
 	uint8_t tmp[2];
@@ -713,7 +755,6 @@ static inline int ssd16xx_load_ws_from_otp(const struct device *dev)
 	return 0;
 }
 
-
 static int ssd16xx_load_lut(const struct device *dev,
 			    const struct ssd16xx_dt_array *lut)
 {
@@ -738,10 +779,12 @@ static int ssd16xx_set_profile(const struct device *dev,
 	const struct ssd16xx_config *config = dev->config;
 	struct ssd16xx_data *data = dev->data;
 	const struct ssd16xx_profile *p;
-	const uint16_t last_gate = config->width - 1;
-	uint8_t gdo[3];
-	size_t gdo_len;
+//	const uint16_t last_gate = config->width - 1;
+//	uint8_t gdo[3];
+//	size_t gdo_len;
 	int err = 0;
+
+
 
 	if (type >= SSD16XX_NUM_PROFILES) {
 		return -EINVAL;
@@ -765,17 +808,19 @@ static int ssd16xx_set_profile(const struct device *dev,
 	 * Perform a soft reset to make sure registers are reset. This
 	 * will leave the RAM contents intact.
 	 */
-	err = ssd16xx_write_cmd(dev, SSD16XX_CMD_SW_RESET, NULL, 0);
-	if (err < 0) {
-		return err;
+	if (type != SSD16XX_PROFILE_PARTIAL) {
+		err = ssd16xx_write_cmd(dev, SSD16XX_CMD_SW_RESET, NULL, 0);
+		if (err < 0) {
+			return err;
+		}
 	}
 
-	gdo_len = push_y_param(dev, gdo, last_gate);
-	gdo[gdo_len++] = 0U;
-	err = ssd16xx_write_cmd(dev, SSD16XX_CMD_GDO_CTRL, gdo, gdo_len);
-	if (err < 0) {
-		return err;
-	}
+//	gdo_len = push_y_param(dev, gdo, last_gate);
+//	gdo[gdo_len++] = 0U;
+//	err = ssd16xx_write_cmd(dev, SSD16XX_CMD_GDO_CTRL, gdo, gdo_len);
+//	if (err < 0) {
+//		return err;
+//	}
 
 	if (config->softstart.len) {
 		err = ssd16xx_write_cmd(dev, SSD16XX_CMD_SOFTSTART,
@@ -843,7 +888,7 @@ static int ssd16xx_set_profile(const struct device *dev,
 		}
 	}
 
-	err = ssd16xx_write_uint8(dev, SSD16XX_CMD_ENTRY_MODE, data->scan_mode);
+	err = ssd16xx_set_orientation(dev);
 	if (err < 0) {
 		return err;
 	}
@@ -857,7 +902,7 @@ static int ssd16xx_controller_init(const struct device *dev)
 {
 	const struct ssd16xx_config *config = dev->config;
 	struct ssd16xx_data *data = dev->data;
-	enum display_orientation orientation;
+//	enum display_orientation orientation;
 	int err;
 
 	LOG_DBG("");
@@ -870,7 +915,21 @@ static int ssd16xx_controller_init(const struct device *dev)
 		return err;
 	}
 
+	LOG_DBG("Before Sleep");
+
 	k_msleep(SSD16XX_RESET_DELAY);
+
+	LOG_DBG("Sleep done");
+
+	if (config->rotation == 0U) {
+		data->orientation = DISPLAY_ORIENTATION_NORMAL;
+	} else if (config->rotation == 90U) {
+		data->orientation = DISPLAY_ORIENTATION_ROTATED_90;
+	} else if (config->rotation == 180U) {
+		data->orientation = DISPLAY_ORIENTATION_ROTATED_180;
+	} else {
+		data->orientation = DISPLAY_ORIENTATION_ROTATED_270;
+	}
 
 	err = ssd16xx_set_profile(dev, SSD16XX_PROFILE_FULL);
 	if (err < 0) {
@@ -887,17 +946,12 @@ static int ssd16xx_controller_init(const struct device *dev)
 		return err;
 	}
 
-	if (config->rotation == 0U) {
-		orientation = DISPLAY_ORIENTATION_NORMAL;
-	} else if (config->rotation == 90U) {
-		orientation = DISPLAY_ORIENTATION_ROTATED_90;
-	} else if (config->rotation == 180U) {
-		orientation = DISPLAY_ORIENTATION_ROTATED_180;
-	} else {
-		orientation = DISPLAY_ORIENTATION_ROTATED_270;
+	err = ssd16xx_update_display(dev);
+	if (err < 0) {
+		return err;
 	}
 
-	err = ssd16xx_set_orientation(dev, orientation);
+	err = ssd16xx_set_profile(dev, SSD16XX_PROFILE_PARTIAL);
 	if (err < 0) {
 		return err;
 	}
@@ -950,10 +1004,10 @@ static DEVICE_API(display, ssd16xx_driver_api) = {
 	.blanking_on = ssd16xx_blanking_on,
 	.blanking_off = ssd16xx_blanking_off,
 	.write = ssd16xx_write,
-	.read = ssd16xx_read,
+//	.read = ssd16xx_read,
 	.get_capabilities = ssd16xx_get_capabilities,
 	.set_pixel_format = ssd16xx_set_pixel_format,
-	.set_orientation = ssd16xx_set_orientation,
+//	.set_orientation = ssd16xx_set_orientation,
 };
 
 #if DT_HAS_COMPAT_STATUS_OKAY(solomon_ssd1608)
@@ -1004,6 +1058,17 @@ static const struct ssd16xx_quirks quirks_solomon_ssd1680 = {
 static struct ssd16xx_quirks quirks_solomon_ssd1681 = {
 	.max_width = 200,
 	.max_height = 200,
+	.pp_width_bits = 8,
+	.pp_height_bits = 16,
+	.ctrl2_full = SSD16XX_GEN2_CTRL2_DISPLAY,
+	.ctrl2_partial = SSD16XX_GEN2_CTRL2_DISPLAY | SSD16XX_GEN2_CTRL2_MODE2,
+};
+#endif
+
+#if DT_HAS_COMPAT_STATUS_OKAY(solomon_ssd1683)
+static struct ssd16xx_quirks quirks_solomon_ssd1683 = {
+	.max_width = 400,
+	.max_height = 400,
 	.pp_width_bits = 8,
 	.pp_height_bits = 16,
 	.ctrl2_full = SSD16XX_GEN2_CTRL2_DISPLAY,
@@ -1071,7 +1136,7 @@ static struct ssd16xx_quirks quirks_solomon_ssd1681 = {
 		.quirks = quirks_ptr,					\
 		.height = DT_PROP(n, height),				\
 		.width = DT_PROP(n, width),				\
-		.rotation = DT_PROP(n, rotation),			\
+		.rotation = DT_PROP_OR(n, rotation, 0),			\
 		.tssv = DT_PROP_OR(n, tssv, 0),				\
 		.softstart = SSD16XX_ASSIGN_ARRAY(n, softstart),	\
 		.profiles = {						\
@@ -1102,3 +1167,5 @@ DT_FOREACH_STATUS_OKAY_VARGS(solomon_ssd1680, SSD16XX_DEFINE,
 			     &quirks_solomon_ssd1680);
 DT_FOREACH_STATUS_OKAY_VARGS(solomon_ssd1681, SSD16XX_DEFINE,
 			     &quirks_solomon_ssd1681);
+DT_FOREACH_STATUS_OKAY_VARGS(solomon_ssd1683, SSD16XX_DEFINE,
+			     &quirks_solomon_ssd1683);

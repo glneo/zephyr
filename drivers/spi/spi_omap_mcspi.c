@@ -202,7 +202,8 @@ static int omap_mcspi_configure(const struct device *dev, const struct spi_confi
 	}
 
 	if (config->operation & SPI_HOLD_ON_CS) {
-		return -ENOTSUP;
+		LOG_ERR("config->operation & SPI_HOLD_ON_CS");
+//		return -ENOTSUP;
 	}
 
 	if (is_peripheral && !IS_ENABLED(CONFIG_SPI_SLAVE)) {
@@ -303,6 +304,7 @@ static int omap_mcspi_configure(const struct device *dev, const struct spi_confi
 
 	rv = omap_mcspi_configure_clk_freq(dev, config->frequency, cfg->clock_frequency);
 	if (rv != 0) {
+		LOG_ERR("omap_mcspi_configure_clk_freq");
 		return rv;
 	}
 

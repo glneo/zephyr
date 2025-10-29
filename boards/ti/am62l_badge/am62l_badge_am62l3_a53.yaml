@@ -1,0 +1,13 @@
+identifier: am62l_badge/am62l3/a53
+name: TI AM62L Badge
+type: mcu
+arch: arm64
+toolchain:
+  - zephyr
+  - cross-compile
+ram: 128
+testing:
+  ignore_tags:
+    - net
+    - bluetooth
+vendor: ti

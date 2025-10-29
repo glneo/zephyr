@@ -57,7 +57,15 @@
 		      <0x01880000 0xc0000>; /* GICR */
 		interrupt-controller;
 		#interrupt-cells = <4>;
+		#address-cells = <1>;
+		#size-cells = <1>;
 		status = "okay";
+
+		its: msi-controller@1820000 {
+			compatible = "arm,gic-v3-its";
+			reg = <0x01820000 0x10000>;
+			status = "okay";
+		};
 	};
 
 	pinctrl: pinctrl@f4000 {

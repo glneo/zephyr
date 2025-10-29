@@ -211,6 +211,15 @@
 		status = "disabled";
 	};
 
+	main_gpio2: gpio@610010 {
+		compatible = "ti,davinci-gpio";
+		reg = <0x00610010 0x28>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		ngpios = <32>;
+		status = "disabled";
+	};
+
 	main_rti0: watchdog@e000000 {
 		compatible = "ti,j7-rti-wdt";
 		reg = <0x0e000000 0x100>;

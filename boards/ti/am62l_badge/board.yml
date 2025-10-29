@@ -1,0 +1,6 @@
+board:
+  name: am62l_badge
+  full_name: AM62L Badge
+  vendor: ti
+  socs:
+  - name: am62l3
