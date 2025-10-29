@@ -18,6 +18,9 @@ family:
     - name: am62a7
       cpuclusters:
       - name: mcu_r5f0_0
+    - name: am62l3
+      cpuclusters:
+      - name: a53
     - name: am6442
       cpuclusters:
       - name: m4
