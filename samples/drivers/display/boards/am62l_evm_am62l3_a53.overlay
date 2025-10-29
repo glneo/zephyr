@@ -1,0 +1,130 @@
+/*
+ * Copyright (C) 2025 Texas Instruments Incorporated - https://www.ti.com/
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	chosen {
+		zephyr,display = &display;
+	};
+
+	spibb0: spibb0 {
+		compatible = "zephyr,spi-bitbang";
+		status = "okay";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		clk-gpios = <&main_gpio0 89 GPIO_ACTIVE_HIGH>; // E13
+		cs-gpios = <&main_gpio0 87 GPIO_ACTIVE_LOW>; // E11
+		mosi-gpios = <&main_gpio0 91 GPIO_ACTIVE_HIGH>; // B12
+	};
+
+	mipi_dbi {
+		compatible = "zephyr,mipi-dbi-spi";
+		spi-dev = <&spibb0>;
+//		spi-dev = <&main_spi1>;
+//		write-only;
+//		status = "okay";
+		dc-gpios = <&main_gpio0 90 GPIO_ACTIVE_HIGH>; // E12
+		reset-gpios = <&main_gpio0 24 GPIO_ACTIVE_LOW>; // H20
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		display: ssd1683fb@0 {
+			compatible = "gooddisplay,gdey042t81", "solomon,ssd1683";
+			mipi-max-frequency = <4000000>;
+			reg = <0>;
+			width = <400>;
+			height = <300>;
+//			rotation = <270>;
+			busy-gpios = <&main_gpio0 39 GPIO_ACTIVE_HIGH>; // N21
+
+			tssv = <0x80>;
+			softstart = [8B 9C A4 0F];
+//			softstart = [8B 9C 96 A4 0F];
+
+			full {
+				border-waveform = <0x05>;
+
+//				gdv = [10 0a];
+//				sdv = [19];
+//				vcom = <0xa8>;
+//
+//				dummy-line = <0x1a>;
+//				gate-line-width = <0x08>;
+//				lut = [22 55 AA 55 AA 55 AA 11
+//				       00 00 00 00 00 00 00 00
+//				       1E 1E 1E 1E 1E 1E 1E 1E
+//				       01 00 00 00 00];
+			};
+//
+//			partial {
+//				gdv = [10 0a];
+//				sdv = [19];
+//				vcom = <0xa8>;
+//				border-waveform = <0x71>;
+//				dummy-line = <0x1a>;
+//				gate-line-width = <0x08>;
+//				lut = [18 00 00 00 00 00 00 00
+//				       00 00 00 00 00 00 00 00
+//				       0F 01 00 00 00 00 00 00
+//				       00 00 00 00 00];
+//			};
+		};
+	};
+};
+
+&wkup_pinctrl {
+	dc_pins_default: dc-default-pins {
+		pinmux = <K3_PINMUX(0x01ac, PIN_OUTPUT, MUX_MODE_7)>; /* (E12) SPI0_D0.GPIO0_90 */
+	};
+
+	res_pins_default: res-default-pins {
+		pinmux = <K3_PINMUX(0x009c, PIN_OUTPUT, MUX_MODE_7)>; /* (H20) GPMC0_AD9.GPIO0_24 */
+	};
+
+	busy_pins_default: busy-default-pins {
+		pinmux = <K3_PINMUX(0x00dc, PIN_INPUT, MUX_MODE_7)>; /* (N21) GPMC0_WPn.GPIO0_39 */
+	};
+
+	clk_pins_default: clk-default-pins {
+		pinmux = <K3_PINMUX(0x01a8, PIN_OUTPUT, MUX_MODE_7)>; /* (E13) SPI0_CLK.GPIO0_89 */
+	};
+
+	cs0_pins_default: cs0-default-pins {
+		pinmux = <K3_PINMUX(0x01a0, PIN_OUTPUT, MUX_MODE_7)>; /* (E11) SPI0_CS0.GPIO0_87 */
+	};
+
+	mosi_pins_default: mosi-default-pins {
+		pinmux = <K3_PINMUX(0x01b0, PIN_OUTPUT, MUX_MODE_7)>; /* (B12) SPI0_D1.GPIO0_91 */
+	};
+};
+
+&main_gpio0_0 {
+	pinctrl-0 = <&dc_pins_default>,
+		    <&res_pins_default>,
+		    <&busy_pins_default>,
+		    <&clk_pins_default>,
+		    <&cs0_pins_default>,
+		    <&mosi_pins_default>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&main_gpio0_1 {
+	status = "okay";
+};
+
+&main_gpio0_2 {
+	status = "okay";
+};
+
+//&main_spi1 {
+//	status = "okay";
+//	pinctrl-0 = <&main_spi1_clk_default>,
+//		    <&main_spi1_cs0_default>,
+//		    <&main_spi1_d1_default>;
+//	pinctrl-names = "default";
+//};
