@@ -136,8 +136,9 @@ int main(void)
 		hello_world_label = lv_label_create(lv_screen_active());
 	}
 
-	lv_label_set_text(hello_world_label, "Hello world!");
+	lv_label_set_text(hello_world_label, "Hello LVGL from Zephyr on AM62L!");
 	lv_obj_align(hello_world_label, LV_ALIGN_CENTER, 0, 0);
+	lv_obj_set_width(hello_world_label, lv_pct(100));
 
 	count_label = lv_label_create(lv_screen_active());
 	lv_obj_align(count_label, LV_ALIGN_BOTTOM_MID, 0, 0);
@@ -149,7 +150,7 @@ int main(void)
 		return 0;
 	}
 
-	while (1) {
+//	while (1) {
 		if ((count % 100) == 0U) {
 			sprintf(count_str, "%d", count/100U);
 			lv_label_set_text(count_label, count_str);
@@ -157,5 +158,5 @@ int main(void)
 		lv_timer_handler();
 		++count;
 		k_sleep(K_MSEC(10));
-	}
+//	}
 }

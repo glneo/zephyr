@@ -1116,7 +1116,7 @@ static int32_t z_tick_sleep(k_timeout_t timeout)
 
 	__ASSERT(!arch_is_in_isr(), "");
 
-	LOG_DBG("thread %p for %lu ticks", _current, (unsigned long)timeout.ticks);
+//	LOG_DBG("thread %p for %lu ticks", _current, (unsigned long)timeout.ticks);
 
 	/* K_NO_WAIT is treated as a 'yield' */
 	if (K_TIMEOUT_EQ(timeout, K_NO_WAIT)) {

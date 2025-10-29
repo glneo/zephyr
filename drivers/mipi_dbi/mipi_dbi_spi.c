@@ -559,7 +559,9 @@ static int mipi_dbi_spi_reset(const struct device *dev, k_timeout_t delay)
 	if (ret < 0) {
 		return ret;
 	}
+	LOG_DBG("Before Sleep");
 	k_sleep(delay);
+	LOG_DBG("After Sleep");
 	return gpio_pin_set_dt(&config->reset, 0);
 }
 
