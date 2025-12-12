@@ -81,7 +81,7 @@ void z_sys_poweroff(void)
 
 	__ASSERT_NO_MSG(psci_data.conduit != SMCCC_CONDUIT_NONE);
 
-	ret = psci_data.invoke_psci_fn(PSCI_0_2_FN_SYSTEM_OFF, 0, 0, 0);
+	ret = psci_data.invoke_psci_fn(PSCI_0_2_FN_SYSTEM_RESET, 0, 0, 0);
 	if (ret < 0) {
 		printk("System power off failed (%d) - halting\n", ret);
 	}
