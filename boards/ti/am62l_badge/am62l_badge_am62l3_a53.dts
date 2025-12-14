@@ -15,6 +15,20 @@
 	model = "TI AM62L Badge";
 	compatible = "ti,am62l_badge";
 
+	aliases {
+		btn-up = &btn_up;
+		btn-down = &btn_down;
+		btn-left = &btn_left;
+		btn-right = &btn_right;
+		btn-back = &btn_back;
+		btn-select = &btn_select;
+		led-red = &led_red;
+		led-green = &led_green;
+		led-blue = &led_blue;
+		buzzer = &buzzer;
+		expander = &expander;
+	};
+
 	chosen {
 		zephyr,console = &main_uart0;
 		zephyr,shell-uart = &main_uart0;
@@ -65,8 +79,7 @@
 
 		btn_select: button-select {
 			label = "Button SELECT";
-			gpios = <&main_gpio0 18 GPIO_ACTIVE_LOW>; // J23
-//			gpios = <&main_gpio0 26 GPIO_ACTIVE_LOW>; // H18
+			gpios = <&main_gpio0 26 GPIO_ACTIVE_LOW>; // H18
 			zephyr,code = <INPUT_KEY_ENTER>;
 		};
 		
@@ -74,6 +87,34 @@
 			label = "Button BACK";
 			gpios = <&main_gpio0 104 GPIO_ACTIVE_LOW>; // D16
 			zephyr,code = <INPUT_KEY_BACK>;
+		};
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led_green: led_0 {
+			gpios = <&main_gpio0 81 GPIO_ACTIVE_HIGH>;
+			label = "Green LED";
+		};
+
+		led_blue: led_1 {
+			gpios = <&main_gpio0 82 GPIO_ACTIVE_HIGH>;
+			label = "Blue LED";
+		};
+
+		led_red: led_2 {
+			gpios = <&main_gpio0 83 GPIO_ACTIVE_HIGH>;
+			label = "Red LED";
+		};
+	};
+
+	buzzers {
+		compatible = "gpio-leds"; // Move this to PWM when that starts working
+
+		buzzer: buzzer_0 {
+			gpios = <&main_gpio0 29 GPIO_ACTIVE_HIGH>;
+			label = "Buzzer";
 		};
 	};
 
@@ -87,6 +128,38 @@
 		clk-gpios = <&main_gpio0 89 GPIO_ACTIVE_HIGH>; // E13
 		cs-gpios = <&main_gpio0 87 GPIO_ACTIVE_LOW>; // E11
 		mosi-gpios = <&main_gpio0 91 GPIO_ACTIVE_HIGH>; // B12
+	};
+
+	spibb1: spibb1 {
+		compatible = "zephyr,spi-bitbang";
+		status = "okay";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		clk-gpios = <&main_gpio0 20 GPIO_ACTIVE_HIGH>; // H22
+		mosi-gpios = <&main_gpio0 18 GPIO_ACTIVE_HIGH>; // J23
+		miso-gpios = <&main_gpio0 17 GPIO_ACTIVE_HIGH>; // K22
+		cs-gpios = <&main_gpio0 19 GPIO_ACTIVE_LOW>; // K23
+
+		expander: mcp23s18@0 {
+			compatible = "microchip,mcp23s17";
+			reg = <0>;
+			spi-max-frequency = <1000000>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			ngpios = <16>;
+			status = "okay";
+		};
+	};
+
+	sensor_supply: sensor-supply {
+		compatible = "regulator-fixed";
+		regulator-name = "sensor_supply";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		enable-gpios = <&wkup_gpio0 1 GPIO_ACTIVE_LOW>;
+		regulator-boot-on;
+		regulator-always-on;
 	};
 
 	mipi_dbi {
@@ -159,7 +232,10 @@
 		    <&busy_pins_default>,
 		    <&clk_pins_default>,
 		    <&cs0_pins_default>,
-		    <&mosi_pins_default>;
+		    <&mosi_pins_default>,
+		    <&button_pins_bank0>,
+		    <&buzzer_pins_default>,
+		    <&spibb1_pins_default>;
 	pinctrl-names = "default";
 	status = "okay";
 };
@@ -173,6 +249,10 @@
 };
 
 &main_gpio0_3 {
+	status = "okay";
+};
+
+&wkup_gpio0 {
 	status = "okay";
 };
 

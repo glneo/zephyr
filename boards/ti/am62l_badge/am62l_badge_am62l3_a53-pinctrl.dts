@@ -15,6 +15,10 @@
 		pinmux = <K3_PINMUX(0x1b8, PIN_OUTPUT, MUX_MODE_0)>; /* (C13) UART0_TXD */
 	};
 
+	sensor_power_pins_default: sensor-power-default-pins {
+		pinmux = <K3_PINMUX(0x0004, PIN_OUTPUT, MUX_MODE_7)>; /* AA23 (WKUP_GPIO0_1) */
+	};
+
 	dc_pins_default: dc-default-pins {
 		pinmux = <K3_PINMUX(0x01ac, PIN_OUTPUT, MUX_MODE_7)>; /* (E12) SPI0_D0.GPIO0_90 */
 	};
@@ -37,5 +41,44 @@
 
 	mosi_pins_default: mosi-default-pins {
 		pinmux = <K3_PINMUX(0x01b0, PIN_OUTPUT, MUX_MODE_7)>; /* (B12) SPI0_D1.GPIO0_91 */
+	};
+
+	/* Bank 0: Pins 0-31 */
+	button_pins_bank0: button-pins-bank0 {
+		pinmux = <K3_PINMUX(0x00b8, PIN_INPUT_PULLUP, MUX_MODE_7)>, /* LEFT (31) */
+			 <K3_PINMUX(0x00a4, PIN_INPUT_PULLUP, MUX_MODE_7)>; /* SELECT (26) */
+	};
+
+	/* Bank 1: Pins 32-63 */
+	button_pins_bank1: button-pins-bank1 {
+		pinmux = <K3_PINMUX(0x00c0, PIN_INPUT_PULLUP, MUX_MODE_7)>, /* UP (32) */
+			 <K3_PINMUX(0x00e8, PIN_INPUT_PULLUP, MUX_MODE_7)>; /* DOWN (42) */
+	};
+
+	/* Bank 2: Pins 64-95 */
+	button_pins_bank2: button-pins-bank2 {
+		pinmux = <K3_PINMUX(0x01c0, PIN_INPUT_PULLUP, MUX_MODE_7)>; /* RIGHT (95) */
+	};
+
+	/* Bank 3: Pins 96-127 */
+	button_pins_bank3: button-pins-bank3 {
+		pinmux = <K3_PINMUX(0x01e4, PIN_INPUT_PULLUP, MUX_MODE_7)>; /* BACK (104) */
+	};
+
+	led_pins_default: led-default-pins {
+		pinmux = <K3_PINMUX(0x0188, PIN_OUTPUT, MUX_MODE_7)>, /* GREEN (81) */
+			 <K3_PINMUX(0x018c, PIN_OUTPUT, MUX_MODE_7)>, /* BLUE (82) */
+			 <K3_PINMUX(0x0190, PIN_OUTPUT, MUX_MODE_7)>; /* RED (83) */
+	};
+
+	buzzer_pins_default: buzzer-default-pins {
+		pinmux = <K3_PINMUX(0x00b0, PIN_OUTPUT, MUX_MODE_7)>; /* BUZZER (29) */
+	};
+
+	spibb1_pins_default: spibb1-default-pins {
+		pinmux = <K3_PINMUX(0x0080, PIN_INPUT, MUX_MODE_7)>, /* K22 SO (17) */
+			 <K3_PINMUX(0x0084, PIN_OUTPUT, MUX_MODE_7)>, /* J23 SI (18) */
+			 <K3_PINMUX(0x0088, PIN_OUTPUT, MUX_MODE_7)>, /* K23 CS (19) */
+			 <K3_PINMUX(0x008c, PIN_OUTPUT, MUX_MODE_7)>; /* H22 CLK (20) */
 	};
 };
