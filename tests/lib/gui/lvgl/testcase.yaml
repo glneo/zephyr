@@ -13,7 +13,7 @@ tests:
     filter: CONFIG_FULL_LIBC_SUPPORTED
     extra_configs:
       - CONFIG_REQUIRES_FULL_LIBC=y
-      - CONFIG_LV_Z_BUFFER_ALLOC_DYNAMIC=y
+      - CONFIG_LV_Z_BUFFER_ALLOC_STATIC=n
       - CONFIG_LV_Z_MEM_POOL_HEAP_LIB_C=y
     platform_allow:
       - native_sim/native/64
@@ -22,7 +22,7 @@ tests:
       - native_sim
   libraries.gui.lvgl.dynamic.pool.sys_heap:
     extra_configs:
-      - CONFIG_LV_Z_BUFFER_ALLOC_DYNAMIC=y
+      - CONFIG_LV_Z_BUFFER_ALLOC_STATIC=n
       - CONFIG_LV_Z_MEM_POOL_SYS_HEAP=y
       - CONFIG_LV_Z_MEM_POOL_SIZE=98304
     platform_allow:

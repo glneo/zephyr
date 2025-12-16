@@ -89,6 +89,17 @@ config LV_Z_FULL_REFRESH
 	  controllers that require a framebuffer to be present in system memory,
 	  since the controller can render the LVGL framebuffer directly
 
+config LV_Z_BUFFER_ALLOC_STATIC
+	bool "Static Rendering Buffer Allocation"
+	default y
+	help
+	  Rendering buffers are statically allocated based on the following
+	  configuration parameters:
+	  * Horizontal screen resolution
+	  * Vertical screen resolution
+	  * Rendering buffer size
+	  * Bytes per pixel
+
 config LV_Z_VDB_ALIGN
 	int "Rending buffer alignment"
 	default 4
@@ -128,29 +139,5 @@ config LV_Z_MONOCHROME_CONVERSION_BUFFER
 	help
 	  When using a monochrome display an intermediate buffer with LV_Z_VDB_SIZE
 	  is needed to perform the conversion.
-
-choice LV_Z_RENDERING_BUFFER_ALLOCATION
-	prompt "Rendering Buffer Allocation"
-	default LV_Z_BUFFER_ALLOC_STATIC
-	help
-	  Type of allocation that should be used for allocating rendering buffers
-
-config LV_Z_BUFFER_ALLOC_STATIC
-	bool "Static"
-	help
-	  Rendering buffers are statically allocated based on the following
-	  configuration parameters:
-	  * Horizontal screen resolution
-	  * Vertical screen resolution
-	  * Rendering buffer size
-	  * Bytes per pixel
-
-config LV_Z_BUFFER_ALLOC_DYNAMIC
-	bool "Dynamic"
-	help
-	  Rendering buffers are dynamically allocated based on the actual
-	  display parameters
-
-endchoice
 
 endmenu
