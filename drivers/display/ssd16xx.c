@@ -113,7 +113,7 @@ static inline void ssd16xx_busy_wait(const struct device *dev)
 	const struct ssd16xx_config *config = dev->config;
 	int pin = gpio_pin_get_dt(&config->busy_gpio);
 
-	LOG_DBG("Before Busy");
+//	LOG_INF("Before Busy");
 
 	while (pin > 0) {
 		__ASSERT(pin >= 0, "Failed to get pin level");
@@ -121,7 +121,7 @@ static inline void ssd16xx_busy_wait(const struct device *dev)
 		pin = gpio_pin_get_dt(&config->busy_gpio);
 	}
 
-	LOG_DBG("After Busy");
+//	LOG_INF("After Busy");
 }
 
 static inline int ssd16xx_write_cmd(const struct device *dev, uint8_t cmd,
@@ -144,9 +144,14 @@ static inline int ssd16xx_write_cmd(const struct device *dev, uint8_t cmd,
 //		printf(")\n");
 //	}
 
+//	LOG_INF("Before writing %d bytes", len);
+
 	err = mipi_dbi_command_write(config->mipi_dev, &config->dbi_config,
 				      cmd, data, len);
 	mipi_dbi_release(config->mipi_dev, &config->dbi_config);
+
+//	LOG_INF("After writing %d bytes", len);
+
 	return err;
 }
 
@@ -296,6 +301,8 @@ static int ssd16xx_update_display(const struct device *dev)
 	if (first_partial && partial)
 		first_partial = false;
 
+	LOG_INF("Screen updating now!!\n");
+
 	return ssd16xx_activate(dev, update_cmd);
 }
 
@@ -303,8 +310,13 @@ static int ssd16xx_blanking_off(const struct device *dev)
 {
 	struct ssd16xx_data *data = dev->data;
 
+	LOG_INF("Blanking off called");
+
 	if (data->blanking_on) {
 		data->blanking_on = false;
+
+		LOG_INF("Turning off blanking (updating screen)");
+
 		return ssd16xx_update_display(dev);
 	}
 
@@ -315,11 +327,14 @@ static int ssd16xx_blanking_on(const struct device *dev)
 {
 	struct ssd16xx_data *data = dev->data;
 
-//	if (!data->blanking_on) {
+	LOG_INF("Blanking on called");
+
+	if (!data->blanking_on) {
+		LOG_INF("Turning on blanking (switching profile to full)");
 //		if (ssd16xx_set_profile(dev, SSD16XX_PROFILE_FULL)) {
 //			return -EIO;
 //		}
-//	}
+	}
 
 	data->blanking_on = true;
 
@@ -476,6 +491,8 @@ static int ssd16xx_write(const struct device *dev,
 	if (err < 0) {
 		return err;
 	}
+
+	LOG_INF("Screen write called with blanking: %s", data->blanking_on ? "ON" : "OFF");
 
 	if (!data->blanking_on) {
 		err = ssd16xx_update_display(dev);
@@ -667,7 +684,7 @@ static int ssd16xx_set_orientation(const struct device *dev)
 static int ssd16xx_clear_cntlr_mem(const struct device *dev, uint8_t ram_cmd)
 {
 	const struct ssd16xx_config *config = dev->config;
-	uint8_t clear_page[64];
+	uint8_t clear_page[1024];
 	int err;
 
 	err = ssd16xx_write_uint8(dev, SSD16XX_CMD_ENTRY_MODE, SSD16XX_DATA_ENTRY_XIYIX);
