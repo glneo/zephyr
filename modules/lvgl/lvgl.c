@@ -286,6 +286,21 @@ void lv_mem_deinit(void)
 	/* Reinitializing the heap clears all allocations, no action needed */
 }
 
+lv_mem_pool_t lv_mem_add_pool(void * mem, size_t bytes)
+{
+	/* Not supported for now */
+	ARG_UNUSED(mem);
+	ARG_UNUSED(bytes);
+	return NULL;
+}
+
+void lv_mem_remove_pool(lv_mem_pool_t pool)
+{
+	/* Not supported for now */
+	ARG_UNUSED(pool);
+	return;
+}
+
 void lv_mem_monitor_core(lv_mem_monitor_t *mon_p)
 {
 	memset(mon_p, 0, sizeof(lv_mem_monitor_t));
