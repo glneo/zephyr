@@ -359,6 +359,8 @@ int lvgl_init(void)
 	struct lvgl_disp_data *p_disp_data;
 	int err;
 
+//	LOG_ERR("lvgl_init called from thread: %p (%s)", k_current_get(), k_thread_name_get(k_current_get()));
+
 	/* clang-format off */
 	FOR_EACH(ENUMERATE_DISPLAY_DEVS, (), LV_DISPLAYS_IDX_LIST);
 	/* clang-format on */
