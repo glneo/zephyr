@@ -59,14 +59,6 @@ config LV_Z_USE_ROUNDER_CB
 	bool
 	default y if LV_Z_AREA_X_ALIGNMENT_WIDTH != 1 || LV_Z_AREA_Y_ALIGNMENT_WIDTH != 1
 
-config APP_LINK_WITH_LVGL
-	bool "Link 'app' with LVGL"
-	default y
-	help
-	  Add LVGL header files to the 'app' include path. It may be
-	  disabled if the include paths for LVGL are causing aliasing
-	  issues for 'app'.
-
 config LV_Z_USE_FILESYSTEM
 	bool "LVGL file system support"
 	depends on FILE_SYSTEM
