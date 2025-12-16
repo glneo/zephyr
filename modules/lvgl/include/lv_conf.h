@@ -18,16 +18,6 @@
 #define LV_USE_STDLIB_STRING  LV_STDLIB_CLIB
 #define LV_USE_STDLIB_SPRINTF LV_STDLIB_CLIB
 
-#if defined(CONFIG_LV_Z_MEM_POOL_HEAP_LIB_C)
-#define lv_malloc_core    malloc
-#define lv_realloc_core   realloc
-#define lv_free_core      free
-#else
-#define lv_malloc_core    lvgl_malloc
-#define lv_realloc_core   lvgl_realloc
-#define lv_free_core      lvgl_free
-#endif
-
 #define LV_ASSERT_HANDLER         __ASSERT_NO_MSG(false);
 #define LV_ASSERT_HANDLER_INCLUDE "zephyr/sys/__assert.h"
 
