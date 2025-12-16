@@ -302,6 +302,33 @@ void lv_mem_remove_pool(lv_mem_pool_t pool)
 	return;
 }
 
+void *lv_malloc_core(size_t size)
+{
+#if CONFIG_LV_Z_MEM_POOL_SYS_HEAP
+	return lvgl_malloc(size);
+#else
+	return malloc(size);
+#endif
+}
+
+void *lv_realloc_core(void *ptr, size_t new_size)
+{
+#if CONFIG_LV_Z_MEM_POOL_SYS_HEAP
+	return lvgl_realloc(ptr, new_size);
+#else
+	return realloc(ptr, new_size);
+#endif
+}
+
+void lv_free_core(void *ptr)
+{
+#if CONFIG_LV_Z_MEM_POOL_SYS_HEAP
+	return lvgl_free(ptr);
+#else
+	return free(ptr);
+#endif
+}
+
 void lv_mem_monitor_core(lv_mem_monitor_t *mon_p)
 {
 	memset(mon_p, 0, sizeof(lv_mem_monitor_t));
