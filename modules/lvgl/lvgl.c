@@ -16,8 +16,9 @@
 #endif
 #ifdef CONFIG_LV_Z_MEM_POOL_SYS_HEAP
 #include "lvgl_mem.h"
+#else
+#include "stdlib.h"
 #endif
-#include LV_STDLIB_INCLUDE
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(lvgl, CONFIG_LV_Z_LOG_LEVEL);

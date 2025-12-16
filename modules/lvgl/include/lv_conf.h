@@ -19,12 +19,10 @@
 #define LV_USE_STDLIB_SPRINTF LV_STDLIB_CLIB
 
 #if defined(CONFIG_LV_Z_MEM_POOL_HEAP_LIB_C)
-#define LV_STDLIB_INCLUDE "stdlib.h"
 #define lv_malloc_core    malloc
 #define lv_realloc_core   realloc
 #define lv_free_core      free
 #else
-#define LV_STDLIB_INCLUDE "lvgl_mem.h"
 #define lv_malloc_core    lvgl_malloc
 #define lv_realloc_core   lvgl_realloc
 #define lv_free_core      lvgl_free
