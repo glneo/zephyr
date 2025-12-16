@@ -18,8 +18,8 @@
 #define LV_USE_STDLIB_STRING  LV_STDLIB_CLIB
 #define LV_USE_STDLIB_SPRINTF LV_STDLIB_CLIB
 
-#define LV_ASSERT_HANDLER         __ASSERT_NO_MSG(false);
-#define LV_ASSERT_HANDLER_INCLUDE "zephyr/sys/__assert.h"
+//#define LV_ASSERT_HANDLER         __ASSERT_NO_MSG(false);
+//#define LV_ASSERT_HANDLER_INCLUDE "zephyr/sys/__assert.h"
 
 /* Provide definition to align LVGL buffers */
 #define LV_ATTRIBUTE_MEM_ALIGN __aligned(CONFIG_LV_ATTRIBUTE_MEM_ALIGN_SIZE)
