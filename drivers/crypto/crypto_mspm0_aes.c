@@ -1,5 +1,6 @@
 /*
  * Copyright 2026 Linumiz
+ * Copyright (c) 2026 Texas Instruments Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -14,7 +15,33 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-#include <ti/driverlib/dl_aes.h>
+#define AES_MSPM0_PWREN_MASK				BIT(0)
+#define AES_MSPM0_PWREN_KEY_MASK			GENMASK(31, 24)
+#define AES_MSPM0_PWREN_KEY				0x26
+
+#define AES_MSPM0_IMASK_AESRDY_MASK			BIT(0)
+#define AES_MSPM0_ICLR_AESRDY_MASK			BIT(0)
+
+#define AES_MSPM0_AESACTL0_SWRST			BIT(7)
+#define AES_MSPM0_AESACTL0_CMEN				BIT(15)
+#define AES_MSPM0_AESACTL0_CMX_MASK			GENMASK(6, 5) /* AES cipher mode select */
+#define AES_MSPM0_AESACTL0_KLX_MASK			GENMASK(3, 2) /* AES key length */
+#define AES_MSPM0_AESACTL0_OPX_MASK			GENMASK(1, 0) /* AES operation */
+
+#define AES_MSPM0_AESACTL0_CMX_ECB			0x0
+#define AES_MSPM0_AESACTL0_CMX_CBC			0x1
+#define AES_MSPM0_AESACTL0_CMX_OFB			0x2
+#define AES_MSPM0_AESACTL0_CMX_CFB			0x3
+
+#define AES_MSPM0_AESACTL0_KLX_128			0x0
+#define AES_MSPM0_AESACTL0_KLX_256			0x2
+
+#define AES_MSPM0_AESACTL0_OPX_ENCRYPT			0x0
+#define AES_MSPM0_AESACTL0_OPX_DECRYPT			0x1
+#define AES_MSPM0_AESACTL0_OPX_GEN_FIRST_KEY		0x2
+#define AES_MSPM0_AESACTL0_OPX_DECRYPT_FIRST_KEY	0x3
+
+#define AES_MSPM0_AESASTAT_KEYWR			BIT(1)
 
 #define AES_HW_CAPS	(CAP_RAW_KEY | CAP_SEPARATE_IO_BUFS | CAP_SYNC_OPS | CAP_NO_IV_PREFIX)
 #define AES_BLOCK_SIZE	16
@@ -32,14 +59,83 @@
 
 LOG_MODULE_REGISTER(aes, CONFIG_CRYPTO_LOG_LEVEL);
 
+typedef struct {
+	uint32_t reserved0[0x200];
+	volatile uint32_t pwren;	/* Power Enable				@0x800h */
+	volatile uint32_t rstctl;	/* Reset Control			@0x804h */
+	uint32_t reserved1[3];
+	volatile uint32_t stat;		/* Status Register			@0x814h */
+	uint32_t reserved2[0x200];
+	volatile uint32_t pdbgctl;	/* Peripheral Debug Control		@0x1018h */
+	uint32_t reserved3[1];
+	volatile uint32_t iidx;		/* Interrupt Index Register		@0x1020h */
+	uint32_t reserved4[1];
+	volatile uint32_t imask;	/* Interrupt Mask			@0x1028h */
+	uint32_t reserved5[1];
+	volatile uint32_t ris;		/* Raw Interrupt Status			@0x1030h */
+	uint32_t reserved6[1];
+	volatile uint32_t mis;		/* Masked Interrupt Status		@0x1038h */
+	uint32_t reserved7[1];
+	volatile uint32_t iset;		/* Interrupt Set			@0x1040h */
+	uint32_t reserved8[1];
+	volatile uint32_t iclr;		/* Interrupt Clear			@0x1048h */
+	uint32_t reserved9[1];
+	volatile uint32_t iidx1;	/* Interrupt Index Register DMA0	@0x1050h */
+	uint32_t reserved10[1];
+	volatile uint32_t imask1;	/* Interrupt Mask DMA0			@0x1058h */
+	uint32_t reserved11[1];
+	volatile uint32_t ris1;		/* Raw Interrupt Status DMA0		@0x1060h */
+	uint32_t reserved12[1];
+	volatile uint32_t mis1;		/* Masked Interrupt Status DMA0		@0x1068h */
+	uint32_t reserved13[1];
+	volatile uint32_t iset1;	/* Interrupt Set DMA0			@0x1070h */
+	uint32_t reserved14[1];
+	volatile uint32_t iclr1;	/* Interrupt Clear DMA0			@0x1078h */
+	uint32_t reserved15[1];
+	volatile uint32_t iidx2;	/* Interrupt Index Register DMA1	@0x1080h */
+	uint32_t reserved16[1];
+	volatile uint32_t imask2;	/* Interrupt Mask DMA1			@0x1088h */
+	uint32_t reserved17[1];
+	volatile uint32_t ris2;		/* Raw Interrupt Status DMA1		@0x1090h */
+	uint32_t reserved18[1];
+	volatile uint32_t mis2;		/* Masked Interrupt Status DMA1		@0x1098h */
+	uint32_t reserved19[1];
+	volatile uint32_t iset2;	/* Interrupt Set DMA1			@0x10A0h */
+	uint32_t reserved20[1];
+	volatile uint32_t iclr2;	/* Interrupt Clear DMA1			@0x10A8h */
+	uint32_t reserved21[1];
+	volatile uint32_t iidx3;	/* Interrupt Index Register DMA2	@0x10B0h */
+	uint32_t reserved22[1];
+	volatile uint32_t imask3;	/* Interrupt Mask DMA2			@0x10B8h */
+	uint32_t reserved23[1];
+	volatile uint32_t ris3;		/* Raw Interrupt Status DMA2		@0x10C0h */
+	uint32_t reserved24[1];
+	volatile uint32_t mis3;		/* Masked Interrupt Status DMA2		@0x10C8h */
+	uint32_t reserved25[1];
+	volatile uint32_t iset3;	/* Interrupt Set DMA2			@0x10D0h */
+	uint32_t reserved26[1];
+	volatile uint32_t iclr3;	/* Interrupt Clear DMA2			@0x10D8h */
+	uint32_t reserved27[1];
+	volatile uint32_t evt_mode;	/* Event Mode				@0x10E0h */
+	uint32_t reserved28[7];
+	volatile uint32_t aesactl0;	/* AES Control Register 0		@0x1100h */
+	volatile uint32_t aesactl1;	/* AES Control Register 1		@0x1104h */
+	volatile uint32_t aesastat;	/* AES Status Register			@0x1108h */
+	volatile uint32_t aesakey;	/* AES Key Register			@0x110Ch */
+	volatile uint32_t aesadin;	/* AES Data In Register			@0x1110h */
+	volatile uint32_t aesadout;	/* AES Data Out Register		@0x1114h */
+	volatile uint32_t aesaxdin;	/* AES XORed Data In Register		@0x1118h */
+	volatile uint32_t aesaxin;	/* AES XORed Data In (no trigger)	@0x111Ch */
+} aes_ti_mspm0_reg_t;
+
 struct crypto_mspm0_aes_config {
-	AES_Regs *regs;
+	aes_ti_mspm0_reg_t *regs;
 	void (*irq_config_func)(const struct device *dev);
 };
 
 struct mspm0_aes_session {
-	DL_AES_KEY_LENGTH keylen;
-	DL_AES_MODE aesconfig;
+	uint32_t keylen;
+	uint32_t aesconfig;
 	enum cipher_op op;
 	bool in_use;
 };
@@ -49,6 +145,108 @@ struct crypto_mspm0_aes_data {
 	struct k_mutex device_mutex;
 	struct k_sem aes_done;
 };
+
+static void *aes_check_alignment(const void *ptr)
+{
+	if ((uintptr_t)ptr & 0x3) {
+		return NULL;  /* Unaligned */
+	}
+	return (void *)ptr;
+}
+
+static void aes_load_data_word(volatile uint32_t *reg, const uint32_t *data, uint8_t len)
+{
+	for (uint8_t i = 0; i < len; i++) {
+		*reg = data[i];
+	}
+}
+
+static int aes_set_key(aes_ti_mspm0_reg_t *regs, const uint8_t *key, uint32_t keylen)
+{
+	const uint32_t *key_aligned;
+	uint8_t num_words;
+	uint8_t kl = FIELD_GET(AES_MSPM0_AESACTL0_KLX_MASK, keylen);
+
+	key_aligned = aes_check_alignment(key);
+	if (key_aligned == NULL) {
+		LOG_ERR("Unaligned key pointer");
+		return -EINVAL;
+	}
+
+	switch (kl) {
+	case AES_MSPM0_AESACTL0_KLX_128:
+		num_words = 4U;
+		break;
+	case AES_MSPM0_AESACTL0_KLX_256:
+		num_words = 8U;
+		break;
+	default:
+		LOG_ERR("Invalid key length");
+		return -EINVAL;
+	}
+
+	aes_load_data_word(&regs->aesakey, key_aligned, num_words);
+	return 0;
+}
+
+static int aes_load_data_in(aes_ti_mspm0_reg_t *regs, const uint8_t *data)
+{
+	const uint32_t *data_aligned;
+
+	data_aligned = aes_check_alignment(data);
+	if (data_aligned == NULL) {
+		LOG_ERR("Unaligned data pointer");
+		return -EINVAL;
+	}
+
+	aes_load_data_word(&regs->aesadin, data_aligned, 4U);
+	return 0;
+}
+
+static int aes_get_data_out(aes_ti_mspm0_reg_t *regs, uint8_t *data)
+{
+	uint32_t *data_aligned;
+
+	data_aligned = aes_check_alignment(data);
+	if (data_aligned == NULL) {
+		LOG_ERR("Unaligned data pointer");
+		return -EINVAL;
+	}
+
+	for (uint8_t i = 0; i < 4U; i++) {
+		data_aligned[i] = regs->aesadout;
+	}
+
+	return 0;
+}
+
+static int aes_load_xor_data_in(aes_ti_mspm0_reg_t *regs, const uint8_t *data)
+{
+	const uint32_t *data_aligned;
+
+	data_aligned = aes_check_alignment(data);
+	if (data_aligned == NULL) {
+		LOG_ERR("Unaligned data pointer");
+		return -EINVAL;
+	}
+
+	aes_load_data_word(&regs->aesaxdin, data_aligned, 4U);
+	return 0;
+}
+
+static int aes_load_xor_data_in_without_trigger(aes_ti_mspm0_reg_t *regs, const uint8_t *data)
+{
+	const uint32_t *data_aligned;
+
+	data_aligned = aes_check_alignment(data);
+	if (data_aligned == NULL) {
+		LOG_ERR("Unaligned data pointer");
+		return -EINVAL;
+	}
+
+	aes_load_data_word(&regs->aesaxin, data_aligned, 4U);
+	return 0;
+}
 
 static int validate_pkt(struct cipher_pkt *pkt)
 {
@@ -77,19 +275,23 @@ static int aes_hw_init(struct cipher_ctx *ctx)
 	struct mspm0_aes_session *session = ctx->drv_sessn_state;
 	int ret;
 
-	DL_AES_softwareReset(config->regs);
+	config->regs->aesactl0 |= AES_MSPM0_AESACTL0_SWRST;
 
-	DL_AES_init(config->regs, session->aesconfig, session->keylen);
+	config->regs->aesactl0 = (config->regs->aesactl0 &
+				      ~(AES_MSPM0_AESACTL0_CMX_MASK |
+				      AES_MSPM0_AESACTL0_OPX_MASK |
+				      AES_MSPM0_AESACTL0_KLX_MASK)) |
+				      session->aesconfig | session->keylen;
 
-	ret = DL_AES_setKey(config->regs, ctx->key.bit_stream, session->keylen);
-	if (ret != DL_AES_STATUS_SUCCESS) {
+	ret = aes_set_key(config->regs, ctx->key.bit_stream, session->keylen);
+	if (ret != 0) {
 		LOG_ERR("AES HW init setkey failed : %d", ret);
 		return ret;
 	}
 
-	DL_AES_setAllKeyWritten(config->regs);
+	config->regs->aesastat |= AES_MSPM0_AESASTAT_KEYWR;
 
-	return ret;
+	return 0;
 }
 
 static int crypto_aes_ecb_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt)
@@ -125,8 +327,8 @@ static int crypto_aes_ecb_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt)
 
 	do {
 		/* load the block */
-		ret = DL_AES_loadDataIn(config->regs, &pkt->in_buf[bytes_processed]);
-		if (ret != DL_AES_STATUS_SUCCESS) {
+		ret = aes_load_data_in(config->regs, &pkt->in_buf[bytes_processed]);
+		if (ret != 0) {
 			break;
 		}
 
@@ -137,8 +339,8 @@ static int crypto_aes_ecb_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt)
 		}
 
 		/* read the dataout */
-		ret = DL_AES_getDataOut(config->regs, &pkt->out_buf[bytes_processed]);
-		if (ret != DL_AES_STATUS_SUCCESS) {
+		ret = aes_get_data_out(config->regs, &pkt->out_buf[bytes_processed]);
+		if (ret != 0) {
 			break;
 		}
 
@@ -193,41 +395,48 @@ static int crypto_aes_cbc_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt, uin
 	}
 
 	/* Enable cipher mode for cbc */
-	DL_AES_enableCipherMode(config->regs);
+	config->regs->aesactl0 |= AES_MSPM0_AESACTL0_CMEN;
 
 	/* change the mode from pre-gen to use-pre-gen key mode for decrypt */
 	if (session->op == CRYPTO_CIPHER_OP_DECRYPT) {
-		DL_AES_MODE aesmode;
+		uint32_t aesmode;
 
 		ret = k_sem_take(&data->aes_done, AES_SEM_TIMEOUT);
 		if (ret != 0) {
 			goto cleanup;
 		}
 
-		aesmode = DL_AES_MODE_DECRYPT_KEY_IS_FIRST_ROUND_KEY_CBC_MODE;
+		aesmode = FIELD_PREP(AES_MSPM0_AESACTL0_CMX_MASK, AES_MSPM0_AESACTL0_CMX_CBC) |
+			    FIELD_PREP(AES_MSPM0_AESACTL0_OPX_MASK,
+			    AES_MSPM0_AESACTL0_OPX_DECRYPT_FIRST_KEY);
 
-		DL_AES_init(config->regs, aesmode, session->keylen);
-		DL_AES_setAllKeyWritten(config->regs);
+		config->regs->aesactl0 = (config->regs->aesactl0 &
+					      ~(AES_MSPM0_AESACTL0_CMX_MASK |
+					      AES_MSPM0_AESACTL0_OPX_MASK |
+					      AES_MSPM0_AESACTL0_KLX_MASK)) |
+					      aesmode | session->keylen;
+
+		config->regs->aesastat |= AES_MSPM0_AESASTAT_KEYWR;
 	}
 
 	/* load iv */
-	ret = DL_AES_loadXORDataInWithoutTrigger(config->regs, iv);
-	if (ret != DL_AES_STATUS_SUCCESS) {
+	ret = aes_load_xor_data_in_without_trigger(config->regs, iv);
+	if (ret != 0) {
 		goto cleanup;
 	}
 
 	do {
 		/* load the next block */
 		if (session->op == CRYPTO_CIPHER_OP_DECRYPT) {
-			ret = DL_AES_loadDataIn(config->regs,
+			ret = aes_load_data_in(config->regs,
 						&pkt->in_buf[bytes_processed]);
-			if (ret != DL_AES_STATUS_SUCCESS) {
+			if (ret != 0) {
 				break;
 			}
 		} else {
-			ret = DL_AES_loadXORDataIn(config->regs,
+			ret = aes_load_xor_data_in(config->regs,
 						   &pkt->in_buf[bytes_processed]);
-			if (ret != DL_AES_STATUS_SUCCESS) {
+			if (ret != 0) {
 				break;
 			}
 		}
@@ -240,8 +449,8 @@ static int crypto_aes_cbc_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt, uin
 
 		/* xor the iv with internal state */
 		if (session->op == CRYPTO_CIPHER_OP_DECRYPT) {
-			ret = DL_AES_loadXORDataInWithoutTrigger(config->regs, iv);
-			if (ret != DL_AES_STATUS_SUCCESS) {
+			ret = aes_load_xor_data_in_without_trigger(config->regs, iv);
+			if (ret != 0) {
 				break;
 			}
 			/* update iv to current ciphertext block for next block's XOR */
@@ -249,8 +458,8 @@ static int crypto_aes_cbc_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt, uin
 		}
 
 		/* read the dataout */
-		ret = DL_AES_getDataOut(config->regs, &pkt->out_buf[bytes_processed]);
-		if (ret != DL_AES_STATUS_SUCCESS) {
+		ret = aes_get_data_out(config->regs, &pkt->out_buf[bytes_processed]);
+		if (ret != 0) {
 			break;
 		}
 		bytes_processed += AES_BLOCK_SIZE;
@@ -271,12 +480,11 @@ static void crypto_mspm0_aes_isr(const struct device *dev)
 {
 	const struct crypto_mspm0_aes_config *config = dev->config;
 	struct crypto_mspm0_aes_data *data = dev->data;
-
-	/* DL_AES_getPendingInterrupt reads from IIDX reg
-	 * on CPU read the current interrupt is cleared by the hardware and the
-	 * corresponding interrupt flag in RIS and MIS are cleared as well.
+	/* Current interrupt is cleared by the hardware on reading IIDX
+	 * register and corresponding interrupt flag in RIS and MIS are
+	 * cleared as well.
 	 */
-	if (!DL_AES_getPendingInterrupt(config->regs)) {
+	if (!(config->regs->iidx)) {
 		LOG_ERR("No pending Interrupts");
 		return;
 	}
@@ -288,8 +496,8 @@ static int aes_session_setup(const struct device *dev, struct cipher_ctx *ctx,
 {
 	struct crypto_mspm0_aes_data *data = dev->data;
 	struct mspm0_aes_session *session = NULL;
-	DL_AES_KEY_LENGTH keylen;
-	DL_AES_MODE aesconfig;
+	uint32_t keylen;
+	uint32_t aesconfig;
 	int ret;
 
 	if (algo != CRYPTO_CIPHER_ALGO_AES || ctx == NULL || ctx->key.bit_stream == NULL) {
@@ -302,10 +510,10 @@ static int aes_session_setup(const struct device *dev, struct cipher_ctx *ctx,
 
 	switch (ctx->keylen) {
 	case 16U:
-		keylen = DL_AES_KEY_LENGTH_128;
+		keylen = FIELD_PREP(AES_MSPM0_AESACTL0_KLX_MASK, AES_MSPM0_AESACTL0_KLX_128);
 		break;
 	case 32U:
-		keylen = DL_AES_KEY_LENGTH_256;
+		keylen = FIELD_PREP(AES_MSPM0_AESACTL0_KLX_MASK, AES_MSPM0_AESACTL0_KLX_256);
 		break;
 	default:
 		LOG_ERR("key size is not supported");
@@ -314,16 +522,20 @@ static int aes_session_setup(const struct device *dev, struct cipher_ctx *ctx,
 
 	switch (mode) {
 	case CRYPTO_CIPHER_MODE_ECB:
-		aesconfig = (op == CRYPTO_CIPHER_OP_ENCRYPT)
-			? DL_AES_MODE_ENCRYPT_ECB_MODE
-			: DL_AES_MODE_DECRYPT_SAME_KEY_ECB_MODE;
+		aesconfig = FIELD_PREP(AES_MSPM0_AESACTL0_CMX_MASK, AES_MSPM0_AESACTL0_CMX_ECB) |
+			    FIELD_PREP(AES_MSPM0_AESACTL0_OPX_MASK,
+			    (op == CRYPTO_CIPHER_OP_ENCRYPT)
+			    ? AES_MSPM0_AESACTL0_OPX_ENCRYPT
+			    : AES_MSPM0_AESACTL0_OPX_DECRYPT);
 		ctx->ops.block_crypt_hndlr = crypto_aes_ecb_op;
 		break;
 
 	case CRYPTO_CIPHER_MODE_CBC:
-		aesconfig = (op == CRYPTO_CIPHER_OP_ENCRYPT)
-			? DL_AES_MODE_ENCRYPT_CBC_MODE
-			: DL_AES_MODE_GEN_FIRST_ROUND_KEY_CBC_MODE;
+		aesconfig = FIELD_PREP(AES_MSPM0_AESACTL0_CMX_MASK, AES_MSPM0_AESACTL0_CMX_CBC) |
+			    FIELD_PREP(AES_MSPM0_AESACTL0_OPX_MASK,
+			    (op == CRYPTO_CIPHER_OP_ENCRYPT)
+			    ? AES_MSPM0_AESACTL0_OPX_ENCRYPT
+			    : AES_MSPM0_AESACTL0_OPX_GEN_FIRST_KEY);
 		ctx->ops.cbc_crypt_hndlr = crypto_aes_cbc_op;
 		break;
 
@@ -407,20 +619,24 @@ static int crypto_aes_init(const struct device *dev)
 {
 	const struct crypto_mspm0_aes_config *config = dev->config;
 
-	DL_AES_enablePower(config->regs);
+	if (!(config->regs->pwren & AES_MSPM0_PWREN_MASK)) {
+		config->regs->pwren =
+		FIELD_PREP(AES_MSPM0_PWREN_KEY_MASK, AES_MSPM0_PWREN_KEY) |
+		AES_MSPM0_PWREN_MASK;
+	}
 
 	delay_cycles(CONFIG_MSPM0_PERIPH_STARTUP_DELAY);
 
 	/* disable interrupt */
-	DL_AES_disableInterrupt(config->regs);
+	config->regs->imask &= ~(AES_MSPM0_IMASK_AESRDY_MASK);
 
 	/* clear interrupt status regs */
-	DL_AES_clearInterruptStatus(config->regs);
+	config->regs->iclr |= AES_MSPM0_ICLR_AESRDY_MASK;
 
 	config->irq_config_func(dev);
 
 	/* enable interrupt */
-	DL_AES_enableInterrupt(config->regs);
+	config->regs->imask |= AES_MSPM0_IMASK_AESRDY_MASK;
 
 	return 0;
 }
@@ -441,7 +657,7 @@ static DEVICE_API(crypto, crypto_enc_funcs) = {
 	}											\
 												\
 	static const struct crypto_mspm0_aes_config crypto_aes_config_##n = {			\
-		.regs = (AES_Regs *)DT_INST_REG_ADDR(n),					\
+		.regs = (aes_ti_mspm0_reg_t *)DT_INST_REG_ADDR(n),				\
 		.irq_config_func = crypto_mspm0_irq_config_##n,					\
 	};											\
 												\
