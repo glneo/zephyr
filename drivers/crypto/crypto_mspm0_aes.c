@@ -17,7 +17,7 @@
 
 #define AES_MSPM0_PWREN_MASK				BIT(0)
 #define AES_MSPM0_PWREN_KEY_MASK			GENMASK(31, 24)
-#define AES_MSPM0_PWREN_KEY				0x26
+#define AES_MSPM0_PWREN_KEY				FIELD_PREP(AES_MSPM0_PWREN_KEY_MASK, 0x26)
 
 #define AES_MSPM0_IMASK_AESRDY_MASK			BIT(0)
 #define AES_MSPM0_ICLR_AESRDY_MASK			BIT(0)
@@ -28,18 +28,18 @@
 #define AES_MSPM0_AESACTL0_KLX_MASK			GENMASK(3, 2) /* AES key length */
 #define AES_MSPM0_AESACTL0_OPX_MASK			GENMASK(1, 0) /* AES operation */
 
-#define AES_MSPM0_AESACTL0_CMX_ECB			0x0
-#define AES_MSPM0_AESACTL0_CMX_CBC			0x1
-#define AES_MSPM0_AESACTL0_CMX_OFB			0x2
-#define AES_MSPM0_AESACTL0_CMX_CFB			0x3
+#define AES_MSPM0_AESACTL0_CMX_ECB			FIELD_PREP(AES_MSPM0_AESACTL0_CMX_MASK, 0x0)
+#define AES_MSPM0_AESACTL0_CMX_CBC			FIELD_PREP(AES_MSPM0_AESACTL0_CMX_MASK, 0x1)
+#define AES_MSPM0_AESACTL0_CMX_OFB			FIELD_PREP(AES_MSPM0_AESACTL0_CMX_MASK, 0x2)
+#define AES_MSPM0_AESACTL0_CMX_CFB			FIELD_PREP(AES_MSPM0_AESACTL0_CMX_MASK, 0x3)
 
-#define AES_MSPM0_AESACTL0_KLX_128			0x0
-#define AES_MSPM0_AESACTL0_KLX_256			0x2
+#define AES_MSPM0_AESACTL0_KLX_128			FIELD_PREP(AES_MSPM0_AESACTL0_KLX_MASK, 0x0)
+#define AES_MSPM0_AESACTL0_KLX_256			FIELD_PREP(AES_MSPM0_AESACTL0_KLX_MASK, 0x2)
 
-#define AES_MSPM0_AESACTL0_OPX_ENCRYPT			0x0
-#define AES_MSPM0_AESACTL0_OPX_DECRYPT			0x1
-#define AES_MSPM0_AESACTL0_OPX_GEN_FIRST_KEY		0x2
-#define AES_MSPM0_AESACTL0_OPX_DECRYPT_FIRST_KEY	0x3
+#define AES_MSPM0_AESACTL0_OPX_ENCRYPT			FIELD_PREP(AES_MSPM0_AESACTL0_OPX_MASK, 0x0)
+#define AES_MSPM0_AESACTL0_OPX_DECRYPT			FIELD_PREP(AES_MSPM0_AESACTL0_OPX_MASK, 0x1)
+#define AES_MSPM0_AESACTL0_OPX_GEN_FIRST_KEY		FIELD_PREP(AES_MSPM0_AESACTL0_OPX_MASK, 0x2)
+#define AES_MSPM0_AESACTL0_OPX_DECRYPT_FIRST_KEY	FIELD_PREP(AES_MSPM0_AESACTL0_OPX_MASK, 0x3)
 
 #define AES_MSPM0_AESASTAT_KEYWR			BIT(1)
 
@@ -146,32 +146,23 @@ struct crypto_mspm0_aes_data {
 	struct k_sem aes_done;
 };
 
-static void *aes_check_alignment(const void *ptr)
-{
-	if ((uintptr_t)ptr & 0x3) {
-		return NULL;  /* Unaligned */
-	}
-	return (void *)ptr;
-}
-
-static void aes_load_data_word(volatile uint32_t *reg, const uint32_t *data, uint8_t len)
+static int aes_load_data_word(volatile uint32_t *reg, const uint8_t *ptr, uint8_t len)
 {
 	for (uint8_t i = 0; i < len; i++) {
-		*reg = data[i];
+		/* Read in each byte to avoid possible unaligned 32bit access */
+		*reg = ((uint32_t)ptr[0] <<  0) |
+		       ((uint32_t)ptr[1] <<  8) |
+		       ((uint32_t)ptr[2] << 16) |
+		       ((uint32_t)ptr[3] << 24);
 	}
+
+	return 0;
 }
 
 static int aes_set_key(aes_ti_mspm0_reg_t *regs, const uint8_t *key, uint32_t keylen)
 {
-	const uint32_t *key_aligned;
 	uint8_t num_words;
 	uint8_t kl = FIELD_GET(AES_MSPM0_AESACTL0_KLX_MASK, keylen);
-
-	key_aligned = aes_check_alignment(key);
-	if (key_aligned == NULL) {
-		LOG_ERR("Unaligned key pointer");
-		return -EINVAL;
-	}
 
 	switch (kl) {
 	case AES_MSPM0_AESACTL0_KLX_128:
@@ -185,36 +176,23 @@ static int aes_set_key(aes_ti_mspm0_reg_t *regs, const uint8_t *key, uint32_t ke
 		return -EINVAL;
 	}
 
-	aes_load_data_word(&regs->aesakey, key_aligned, num_words);
-	return 0;
+	return aes_load_data_word(&regs->aesakey, key, num_words);
 }
 
 static int aes_load_data_in(aes_ti_mspm0_reg_t *regs, const uint8_t *data)
 {
-	const uint32_t *data_aligned;
-
-	data_aligned = aes_check_alignment(data);
-	if (data_aligned == NULL) {
-		LOG_ERR("Unaligned data pointer");
-		return -EINVAL;
-	}
-
-	aes_load_data_word(&regs->aesadin, data_aligned, 4U);
-	return 0;
+	return aes_load_data_word(&regs->aesadin, data, 4U);
 }
 
 static int aes_get_data_out(aes_ti_mspm0_reg_t *regs, uint8_t *data)
 {
-	uint32_t *data_aligned;
-
-	data_aligned = aes_check_alignment(data);
-	if (data_aligned == NULL) {
-		LOG_ERR("Unaligned data pointer");
-		return -EINVAL;
-	}
-
 	for (uint8_t i = 0; i < 4U; i++) {
-		data_aligned[i] = regs->aesadout;
+		/* Read out each byte to avoid possible unaligned 32bit access */
+		uint32_t value = regs->aesadout;
+		data[i * 4 + 0] = (value >>  0) & 0xff;
+		data[i * 4 + 1] = (value >>  8) & 0xff;
+		data[i * 4 + 2] = (value >> 16) & 0xff;
+		data[i * 4 + 3] = (value >> 24) & 0xff;
 	}
 
 	return 0;
@@ -222,30 +200,12 @@ static int aes_get_data_out(aes_ti_mspm0_reg_t *regs, uint8_t *data)
 
 static int aes_load_xor_data_in(aes_ti_mspm0_reg_t *regs, const uint8_t *data)
 {
-	const uint32_t *data_aligned;
-
-	data_aligned = aes_check_alignment(data);
-	if (data_aligned == NULL) {
-		LOG_ERR("Unaligned data pointer");
-		return -EINVAL;
-	}
-
-	aes_load_data_word(&regs->aesaxdin, data_aligned, 4U);
-	return 0;
+	return aes_load_data_word(&regs->aesaxdin, data, 4U);
 }
 
 static int aes_load_xor_data_in_without_trigger(aes_ti_mspm0_reg_t *regs, const uint8_t *data)
 {
-	const uint32_t *data_aligned;
-
-	data_aligned = aes_check_alignment(data);
-	if (data_aligned == NULL) {
-		LOG_ERR("Unaligned data pointer");
-		return -EINVAL;
-	}
-
-	aes_load_data_word(&regs->aesaxin, data_aligned, 4U);
-	return 0;
+	return aes_load_data_word(&regs->aesaxin, data, 4U);
 }
 
 static int validate_pkt(struct cipher_pkt *pkt)
@@ -406,15 +366,12 @@ static int crypto_aes_cbc_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt, uin
 			goto cleanup;
 		}
 
-		aesmode = FIELD_PREP(AES_MSPM0_AESACTL0_CMX_MASK, AES_MSPM0_AESACTL0_CMX_CBC) |
-			    FIELD_PREP(AES_MSPM0_AESACTL0_OPX_MASK,
-			    AES_MSPM0_AESACTL0_OPX_DECRYPT_FIRST_KEY);
+		aesmode = AES_MSPM0_AESACTL0_CMX_CBC | AES_MSPM0_AESACTL0_OPX_DECRYPT_FIRST_KEY;
 
-		config->regs->aesactl0 = (config->regs->aesactl0 &
-					      ~(AES_MSPM0_AESACTL0_CMX_MASK |
-					      AES_MSPM0_AESACTL0_OPX_MASK |
-					      AES_MSPM0_AESACTL0_KLX_MASK)) |
-					      aesmode | session->keylen;
+		config->regs->aesactl0 = (config->regs->aesactl0 & ~(AES_MSPM0_AESACTL0_CMX_MASK |
+		                                                     AES_MSPM0_AESACTL0_OPX_MASK |
+		                                                     AES_MSPM0_AESACTL0_KLX_MASK)) |
+		                          aesmode | session->keylen;
 
 		config->regs->aesastat |= AES_MSPM0_AESASTAT_KEYWR;
 	}
@@ -428,14 +385,12 @@ static int crypto_aes_cbc_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt, uin
 	do {
 		/* load the next block */
 		if (session->op == CRYPTO_CIPHER_OP_DECRYPT) {
-			ret = aes_load_data_in(config->regs,
-						&pkt->in_buf[bytes_processed]);
+			ret = aes_load_data_in(config->regs, &pkt->in_buf[bytes_processed]);
 			if (ret != 0) {
 				break;
 			}
 		} else {
-			ret = aes_load_xor_data_in(config->regs,
-						   &pkt->in_buf[bytes_processed]);
+			ret = aes_load_xor_data_in(config->regs, &pkt->in_buf[bytes_processed]);
 			if (ret != 0) {
 				break;
 			}
@@ -510,10 +465,10 @@ static int aes_session_setup(const struct device *dev, struct cipher_ctx *ctx,
 
 	switch (ctx->keylen) {
 	case 16U:
-		keylen = FIELD_PREP(AES_MSPM0_AESACTL0_KLX_MASK, AES_MSPM0_AESACTL0_KLX_128);
+		keylen = AES_MSPM0_AESACTL0_KLX_128;
 		break;
 	case 32U:
-		keylen = FIELD_PREP(AES_MSPM0_AESACTL0_KLX_MASK, AES_MSPM0_AESACTL0_KLX_256);
+		keylen = AES_MSPM0_AESACTL0_KLX_256;
 		break;
 	default:
 		LOG_ERR("key size is not supported");
@@ -522,20 +477,18 @@ static int aes_session_setup(const struct device *dev, struct cipher_ctx *ctx,
 
 	switch (mode) {
 	case CRYPTO_CIPHER_MODE_ECB:
-		aesconfig = FIELD_PREP(AES_MSPM0_AESACTL0_CMX_MASK, AES_MSPM0_AESACTL0_CMX_ECB) |
-			    FIELD_PREP(AES_MSPM0_AESACTL0_OPX_MASK,
+		aesconfig = AES_MSPM0_AESACTL0_CMX_ECB |
 			    (op == CRYPTO_CIPHER_OP_ENCRYPT)
 			    ? AES_MSPM0_AESACTL0_OPX_ENCRYPT
-			    : AES_MSPM0_AESACTL0_OPX_DECRYPT);
+			    : AES_MSPM0_AESACTL0_OPX_DECRYPT;
 		ctx->ops.block_crypt_hndlr = crypto_aes_ecb_op;
 		break;
 
 	case CRYPTO_CIPHER_MODE_CBC:
-		aesconfig = FIELD_PREP(AES_MSPM0_AESACTL0_CMX_MASK, AES_MSPM0_AESACTL0_CMX_CBC) |
-			    FIELD_PREP(AES_MSPM0_AESACTL0_OPX_MASK,
+		aesconfig = AES_MSPM0_AESACTL0_CMX_CBC |
 			    (op == CRYPTO_CIPHER_OP_ENCRYPT)
 			    ? AES_MSPM0_AESACTL0_OPX_ENCRYPT
-			    : AES_MSPM0_AESACTL0_OPX_GEN_FIRST_KEY);
+			    : AES_MSPM0_AESACTL0_OPX_GEN_FIRST_KEY;
 		ctx->ops.cbc_crypt_hndlr = crypto_aes_cbc_op;
 		break;
 
@@ -620,9 +573,7 @@ static int crypto_aes_init(const struct device *dev)
 	const struct crypto_mspm0_aes_config *config = dev->config;
 
 	if (!(config->regs->pwren & AES_MSPM0_PWREN_MASK)) {
-		config->regs->pwren =
-		FIELD_PREP(AES_MSPM0_PWREN_KEY_MASK, AES_MSPM0_PWREN_KEY) |
-		AES_MSPM0_PWREN_MASK;
+		config->regs->pwren = AES_MSPM0_PWREN_KEY | AES_MSPM0_PWREN_MASK;
 	}
 
 	delay_cycles(CONFIG_MSPM0_PERIPH_STARTUP_DELAY);
